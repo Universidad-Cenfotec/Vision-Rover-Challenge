@@ -1,0 +1,73 @@
+{
+  "_acerca_de": "Configuración del simulador (mock_publisher.py). JSON no admite comentarios, así que las notas van en claves que empiezan con guion bajo; el simulador las ignora. Nada de esto está incrustado en el código: para probar otro escenario se edita este archivo, no el programa.",
+
+  "red": {
+    "host": "0.0.0.0",
+    "port": 2026,
+    "_nota_puerto": "2026 es el puerto oficial del sistema de visión. El sistema real publica en el mismo puerto, así un equipo pasa del simulador a la cancha sin tocar su código."
+  },
+
+  "grid": {
+    "cols": 50,
+    "rows": 50,
+    "cell_mm": 20.0,
+    "_nota_A_CONFIRMAR": "VALOR NOMINAL, A CONFIRMAR CONTRA LA CANCHA REAL. 50x50 celdas de 20 mm equivale a 1000 x 1000 mm. Pero la cancha efectiva NO es el tablero físico: es el área encerrada por los cuatro marcadores ArUco de esquina, medida entre sus orígenes. Según dónde se peguen los marcadores (margen de borde, tamaño del marcador impreso) esa área puede ser algo MENOR que 50x50 celdas: por ejemplo 47x47 si quedan 3 cm de margen por lado. Una vez montada la cancha, hay que medir el área entre marcadores y ajustar cols/rows acá. Los equipos NO deben asumir 50x50: tienen que leer grid del mensaje."
+  },
+
+  "tasas": {
+    "pub_hz": 20.0,
+    "sim_hz": 30.0,
+    "_nota_relojes": "Dos relojes desacoplados, igual que en el sistema real: la simulación avanza a sim_hz (hace de cámara) y la publicación sale por temporizador a pub_hz. Uno nunca bloquea al otro."
+  },
+
+  "rovers": [
+    { "id": 10, "col": 4.0, "row": 4.0, "theta": 45.0 },
+    { "id": 11, "col": 4.0, "row": 8.0, "theta": 45.0 }
+  ],
+  "_nota_rovers": "El id es el ID del marcador ArUco pegado al robot. Los IDs 0..3 quedan reservados para los cuatro marcadores de esquina, por eso los rovers usan 10 y 11. col/row/theta son la pose inicial. Agregar o quitar entradas cambia la cantidad de rovers sin tocar código.",
+
+  "velocidad_rover_celdas_s": 6.0,
+  "giro_rover_grados_s": 90.0,
+
+  "cubes": [
+    { "color": "green", "col": 30.0, "row": 12.0 },
+    { "color": "blue", "col": 18.0, "row": 34.0 },
+    { "color": "red", "col": 38.0, "row": 30.0 }
+  ],
+  "_nota_cubes": "Cubos de 6 cm. El color ES la identidad: no puede haber dos del mismo color. Se admiten 2 o 3 cubos; para probar con 2, se borra una entrada. Todo cubo debe tener un depot de su color (el contrato lo exige).",
+
+  "obstacles": [
+    { "col": 25.0, "row": 25.0 },
+    { "col": 12.0, "row": 20.0 },
+    { "col": 36.0, "row": 18.0 }
+  ],
+  "_nota_obstacles": "Bloques amarillos de 10 cm. No llevan color ni id: el amarillo está reservado para obstáculos y son intercambiables entre sí.",
+
+  "start": { "col": 2.5, "row": 2.5 },
+  "_nota_start": "Esquina de salida de los robots. Coincide con el origen (0,0), que es el marcador ArUco de menor ID (el 0). Está a 2.5 celdas del origen porque es el CENTRO de la zona de salida, no su vértice.",
+
+  "depots": [
+    { "color": "green", "col": 47.5, "row": 2.5 },
+    { "color": "blue", "col": 2.5, "row": 47.5 },
+    { "color": "red", "col": 47.5, "row": 47.5 }
+  ],
+  "_nota_depots_A_CONFIRMAR": "ASIGNACIÓN DE COLOR POR ESQUINA PROVISIONAL, DEBE COINCIDIR CON EL MONTAJE FÍSICO REAL. Las tres esquinas que no son la de salida son, en este orden: la de enfrente sobre el eje col (47.5, 2.5), la de enfrente sobre el eje row (2.5, 47.5) y la diagonal opuesta al origen (47.5, 47.5). Qué color se acopia en cuál se decide al armar la cancha; acá está puesto verde/azul/rojo solo para tener un escenario que corra. Antes de la competencia hay que mirar la cancha montada y corregir esta lista. Las coordenadas también dependen de cols/rows definitivos (ver _nota_A_CONFIRMAR en grid). Los equipos NO deben asumir qué color va en qué esquina: tienen que leer depots del mensaje.",
+
+  "ruido": {
+    "pos_sigma_celdas": 0.06,
+    "theta_sigma_grados": 1.5,
+    "_nota": "Ruido gaussiano que imita el jitter de la detección real. Los equipos deben filtrar o tolerar: si su lógica se rompe con este ruido, se rompe también en la cancha."
+  },
+
+  "patologias": {
+    "radio_oclusion_celdas": 2.0,
+    "prob_perdida_rover": 0.02,
+    "radio_empuje_celdas": 1.5,
+    "_nota_oclusion": "Si un rover queda a menos de radio_oclusion_celdas de un cubo, el cubo deja de verse: NO se reporta con posición vieja y age_ms=0, sino que mantiene su última posición conocida con age_ms creciendo. Un cubo ocluido nunca desaparece de la lista.",
+    "_nota_perdida": "Probabilidad, por cuadro, de que la detección de un rover falle (marcador borroso, reflejo). Mismo tratamiento: última posición conocida y age_ms creciendo.",
+    "_nota_empuje": "Si un rover pasa a menos de radio_empuje_celdas de un cubo, lo empuja en la dirección en la que va. Sirve para que los equipos vean cubos que se mueven solos."
+  },
+
+  "semilla_aleatoria": 20260725,
+  "_nota_semilla": "Semilla fija para que dos corridas den lo mismo y un bug del equipo sea reproducible. Poner null para tener ruido distinto en cada corrida."
+}

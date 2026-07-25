@@ -25,14 +25,31 @@ El formato **no se cambia** sin **subir la versión de protocolo** y **avisar** 
 los equipos (ver `CLAUDE.md`, sección 2). Todo cambio de forma, nombre de campo,
 unidad o semántica es un cambio de contrato.
 
-## Cómo se corre el simulador
+## Qué hay acá
 
-> Pendiente de implementar. El simulador correrá con Python puro, sin
-> dependencias externas pesadas. La invocación prevista será algo como:
->
-> ```bash
-> python -m contrato.simulador
-> ```
->
-> Esta sección se completará cuando el simulador exista. Ver `requirements.txt`
-> para las dependencias (por ahora, ninguna externa).
+| Archivo | Qué es |
+|---|---|
+| `CONTRATO.md` | **El documento para los equipos.** Formato del mensaje, coordenadas, fases y reglas de consumo. Empezar por acá. |
+| `schema.py` | El contrato en código: constantes, estructuras inmutables y `validate_message()`. |
+| `mock_publisher.py` | Simulador: publica telemetría sintética por TCP/NDJSON, con las patologías reales incluidas. |
+| `test_client.py` | Cliente de referencia: consume, valida y mide latencia y saltos de secuencia. |
+| `config_simulador.json` | Toda la configuración del simulador. Nada incrustado en el código. |
+
+## Cómo se corre
+
+En una terminal, el simulador:
+
+```bash
+python -m contrato.mock_publisher          # publica en el puerto 2026
+```
+
+Comandos por teclado mientras corre: `ready`, `start`, `stop`, `quit`.
+
+En otra, el cliente de referencia:
+
+```bash
+python -m contrato.test_client             # se conecta a 127.0.0.1:2026
+```
+
+Ambos corren con Python puro; ver `requirements.txt` (no hay dependencias
+externas).
