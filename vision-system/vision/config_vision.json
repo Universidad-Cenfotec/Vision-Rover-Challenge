@@ -1,0 +1,80 @@
+{
+  "_acerca_de": "Configuración del sistema de visión. JSON no admite comentarios, así que las notas van en claves que empiezan con guion bajo; el cargador las ignora porque lee las claves por nombre. Nada de esto se incrusta en el código.",
+
+  "tablero": {
+    "cols": 50,
+    "rows": 50,
+    "cell_mm": 20.0,
+    "_nota_A_CONFIRMAR": "VALOR NOMINAL, A CONFIRMAR CONTRA LA CANCHA REAL. 50x50 celdas de 20 mm equivale a 1000 x 1000 mm. Pero la cancha efectiva NO es el tablero físico: es el área encerrada por los CENTROS de los cuatro marcadores ArUco de esquina. Según dónde se peguen los marcadores, esa área puede ser bastante menor. Una vez montada la cancha hay que medir entre centros de marcadores y ajustar cols/rows acá. Debe coincidir con la grilla que declara contrato/config_simulador.json."
+  },
+
+  "marcadores_esquina": {
+    "diccionario": "DICT_4X4_50",
+
+    "_REGLA_DE_MONTAJE_FISICO": "⚠️ ESTO NO ES SOLO CÓDIGO: ES LA INSTRUCCIÓN DE CÓMO PEGAR LOS MARCADORES EN LA CANCHA. Si se pegan en otro orden, TODAS las coordenadas salen rotadas o espejadas y nada de lo que publique la visión va a tener sentido. Antes de pegar, leer esto y verificarlo dos veces.",
+
+    "_DISPOSICION_EN_LA_CANCHA": [
+      "El ID 0 va en la ESQUINA DE SALIDA DE LOS ROBOTS. Esa esquina es el origen (0,0).",
+      "Parado mirando la cancha desde arriba, con el marcador 0 arriba a la izquierda,",
+      "los otros tres van EN SENTIDO HORARIO: 1 arriba a la derecha, 2 abajo a la derecha,",
+      "3 abajo a la izquierda.",
+      "",
+      "         col ──────────────────────►",
+      "   ID 0 (0,0) ┌───────────────────┐ ID 1 (cols, 0)",
+      "     │        │                   │",
+      "    row       │      cancha       │",
+      "     │        │                   │",
+      "     ▼   ID 3 └───────────────────┘ ID 2 (cols, rows)",
+      "         (0, rows)",
+      "",
+      "El origen es el CENTRO del marcador ID 0, no su esquina: el centro es lo único",
+      "que se puede medir sin ambigüedad en una imagen.",
+      "Los cuatro marcadores deben quedar PLANOS sobre el tablero y COMPLETAMENTE",
+      "visibles para la cámara, con su zona blanca alrededor sin tapar."
+    ],
+
+    "disposicion": {
+      "0": "origen",
+      "1": "fin_col",
+      "2": "diagonal",
+      "3": "fin_row"
+    },
+    "_nota_disposicion": "Nombres en vez de números para que la disposición no se rompa al cambiar cols/rows. origen=(0,0), fin_col=(cols,0), diagonal=(cols,rows), fin_row=(0,rows)."
+  },
+
+  "sintetico": {
+    "_acerca_de": "Generador de imágenes sintéticas de prueba. NO es el simulador de contrato/: aquel emite posiciones en JSON, este dibuja imágenes del tablero para que el sistema de visión las procese, conociendo la verdad de lo que dibujó.",
+
+    "ancho_px": 1280,
+    "alto_px": 1280,
+    "margen_px": 80,
+    "_nota_tamano": "El lado de celda en píxeles se DERIVA de estos tres valores para que la grilla entre en la imagen, y el tablero queda centrado. Así el tamaño de imagen es lo configurable y no hay que ajustar dos números coherentes entre sí.",
+
+    "lado_marcador_esquina_celdas": 3.0,
+    "lado_marcador_rover_celdas": 4.0,
+    "borde_blanco_celdas": 0.6,
+    "_nota_borde_blanco": "Zona blanca obligatoria alrededor de cada marcador. Sin ella el detector de ArUco no encuentra el marcador: necesita contraste contra el fondo en todo el contorno. En la cancha real hay que respetarlo igual al imprimir y pegar.",
+
+    "color_fondo": 235,
+    "color_grilla": 215,
+    "dibujar_grilla": true,
+    "paso_grilla_celdas": 5,
+    "_nota_grilla": "La grilla es solo una ayuda visual para mirar la imagen; no interviene en la detección.",
+
+    "desenfoque_px": 0,
+    "ruido_sigma": 0.0,
+    "_nota_degradacion": "Para acercar la imagen sintética a una foto real. En 0 la imagen es perfecta. Subirlos sirve para ver cuánto aguanta la detección antes de fallar.",
+
+    "perspectiva": {
+      "activa": false,
+      "inclinacion": 0.12,
+      "_nota": "Simula una cámara que NO está perfectamente cenital, inclinando el tablero: el borde superior se angosta una fracción `inclinacion` del ancho de cada lado. Apagada por defecto. Encenderla importa para verificar de verdad: con una imagen perfectamente cenital la homografía se reduce a una escala y la prueba pasaría aunque la matemática estuviera mal. Además, la cámara real nunca va a estar perfectamente cenital."
+    }
+  },
+
+  "rovers_demo": [
+    { "id": 10, "col": 12.5, "row": 9.0, "theta": 30.0 },
+    { "id": 11, "col": 36.0, "row": 33.5, "theta": 205.0 }
+  ],
+  "_nota_rovers_demo": "Rovers de ejemplo para las imágenes de prueba. El id es el ID de su marcador ArUco: distinto de 0-3, que están reservados para las esquinas. theta en grados, 0 = derecha, antihorario, igual que el contrato."
+}
