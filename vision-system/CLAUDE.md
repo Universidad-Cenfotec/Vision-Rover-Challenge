@@ -121,7 +121,9 @@ repositorio/
 
 ## 6. Estándares de código
 
-- **Python 3.10+.**
+- **Python:** `contrato/` requiere **3.9+** (lo corren los equipos en sus máquinas;
+  piso bajo a propósito para no excluir a nadie). `vision/` requiere **3.10+**
+  (lo corro yo y las estaciones controladas; puede usar sintaxis moderna sin reparos).
 - **Dependencias de visión:** `opencv-contrib-python`, `numpy`, `pyyaml`.
   Nada pesado sin pedirlo.
 - El **cliente de referencia del robot** se escribe en **CircuitPython** (ESP32/IdeaBoard),

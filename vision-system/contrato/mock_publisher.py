@@ -45,7 +45,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 try:  # como paquete: python -m contrato.mock_publisher
     from .schema import (
@@ -106,9 +106,9 @@ class EstadoMundo:
 
     ts_ms: int
     phase: str
-    rovers: Tuple[Rover, ...]
-    cubes: Tuple[Cube, ...]
-    obstacles: Tuple[Obstacle, ...]
+    rovers: tuple[Rover, ...]
+    cubes: tuple[Cube, ...]
+    obstacles: tuple[Obstacle, ...]
 
 
 # --------------------------------------------------------------------------
@@ -124,10 +124,10 @@ class Config:
     port: int
     grid: Grid
     start: Start
-    depots: Tuple[Depot, ...]
-    rovers_iniciales: Tuple[Dict[str, Any], ...]
-    cubes_iniciales: Tuple[Dict[str, Any], ...]
-    obstacles_iniciales: Tuple[Dict[str, Any], ...]
+    depots: tuple[Depot, ...]
+    rovers_iniciales: tuple[dict[str, Any], ...]
+    cubes_iniciales: tuple[dict[str, Any], ...]
+    obstacles_iniciales: tuple[dict[str, Any], ...]
     pub_hz: float
     sim_hz: float
     velocidad_celdas_s: float
@@ -137,7 +137,7 @@ class Config:
     radio_oclusion: float
     prob_perdida_rover: float
     radio_empuje: float
-    semilla: Optional[int]
+    semilla: int | None
 
 
 def cargar_config(ruta: str) -> Config:
@@ -180,7 +180,7 @@ def cargar_config(ruta: str) -> Config:
     )
 
 
-def revisar_config(cfg: Config) -> Optional[str]:
+def revisar_config(cfg: Config) -> str | None:
     """Revisa la configuración antes de arrancar.
 
     Vale la pena fallar acá con un mensaje claro: si la config es incoherente,
@@ -341,7 +341,7 @@ class Simulador:
                 if self._dentro(ncol, nrow):
                     cb.col, cb.row = ncol, nrow
 
-    def _observar_rovers(self, t: int) -> Tuple[Rover, ...]:
+    def _observar_rovers(self, t: int) -> tuple[Rover, ...]:
         """Observa los rovers, con ruido y con pérdidas ocasionales.
 
         Cuando la detección falla, el rover NO desaparece de la lista: se
@@ -366,7 +366,7 @@ class Simulador:
             )
         return tuple(salida)
 
-    def _observar_cubes(self, t: int) -> Tuple[Cube, ...]:
+    def _observar_cubes(self, t: int) -> tuple[Cube, ...]:
         """Observa los cubos. Un rover encima de un cubo lo tapa (oclusión).
 
         Mismo criterio que con los rovers: el cubo ocluido sigue en la lista,
@@ -393,7 +393,7 @@ class Simulador:
             )
         return tuple(salida)
 
-    def _observar_obstacles(self) -> Tuple[Obstacle, ...]:
+    def _observar_obstacles(self) -> tuple[Obstacle, ...]:
         """Los obstáculos son grandes, fijos y muy amarillos: siempre se ven.
 
         Igual llevan ruido, porque su centro detectado también tiembla.
@@ -426,10 +426,10 @@ class RanuraCliente:
     atrás, sin recuperarse jamás.
     """
 
-    def __init__(self, direccion: Tuple[str, int]):
+    def __init__(self, direccion: tuple[str, int]):
         self.direccion = direccion
         self._cond = threading.Condition()
-        self._pendiente: Optional[str] = None
+        self._pendiente: str | None = None
         self._cerrada = False
         self.pisados = 0
         self.enviados = 0
@@ -443,7 +443,7 @@ class RanuraCliente:
             self._pendiente = linea
             self._cond.notify()
 
-    def tomar(self, timeout: float = 0.5) -> Optional[str]:
+    def tomar(self, timeout: float = 0.5) -> str | None:
         """Devuelve el mensaje pendiente, o None si venció el timeout o cerró."""
         with self._cond:
             if self._pendiente is None and not self._cerrada:
@@ -466,9 +466,9 @@ class Publicador:
     def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
-        self._ranuras: List[RanuraCliente] = []
+        self._ranuras: list[RanuraCliente] = []
         self._lock = threading.Lock()
-        self._servidor: Optional[socket.socket] = None
+        self._servidor: socket.socket | None = None
         self._parar = threading.Event()
 
     def arrancar(self) -> None:
@@ -610,7 +610,7 @@ def _hilo_teclado(fase: Fase, salir: threading.Event) -> None:
 
 
 def _hilo_simulacion(
-    sim: Simulador, fase: Fase, estado: List[Optional[EstadoMundo]], salir: threading.Event
+    sim: Simulador, fase: Fase, estado: list[EstadoMundo | None], salir: threading.Event
 ) -> None:
     """Corre al ritmo de la "cámara" y deja el último estado en `estado[0]`.
 
@@ -632,9 +632,9 @@ def _hilo_simulacion(
 def _hilo_publicacion(
     pub: Publicador,
     cfg: Config,
-    estado: List[Optional[EstadoMundo]],
+    estado: list[EstadoMundo | None],
     salir: threading.Event,
-    contador: List[int],
+    contador: list[int],
 ) -> None:
     """Corre por temporizador, independiente de la simulación.
 
@@ -667,7 +667,7 @@ def _hilo_publicacion(
             print("[pub] error al publicar (se sigue): {}".format(exc))
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Simulador de telemetría del Vision-Rover-Challenge (TCP/NDJSON)."
     )
@@ -694,7 +694,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     fase = Fase()
     pub = Publicador(cfg.host, cfg.port)
     salir = threading.Event()
-    estado: List[Optional[EstadoMundo]] = [sim.paso(0.0, fase.valor)]
+    estado: list[EstadoMundo | None] = [sim.paso(0.0, fase.valor)]
     contador = [0]
 
     pub.arrancar()

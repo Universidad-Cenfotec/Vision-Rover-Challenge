@@ -384,6 +384,13 @@ Es una línea y les evita interpretar mal un mensaje del futuro.
 
 Todo corre con **Python puro**: sin OpenCV, sin cámara, sin instalar nada.
 
+> **Requisito: Python 3.9 o superior.** Es lo único que hace falta — no hay
+> dependencias externas que instalar. Verifiquen con `python3 --version`.
+>
+> El piso es 3.9 a propósito, para que les sirva el Python que ya tienen: el que
+> viene de fábrica en macOS es 3.9 y alcanza. Si su versión es más nueva,
+> también anda.
+
 ### `schema.py` — el contrato en código
 
 Las constantes y la validación. Si programan en Python, **importen de acá** en

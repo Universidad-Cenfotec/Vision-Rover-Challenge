@@ -1,0 +1,44 @@
+# Archivos que NO se versionan del sistema de visión.
+#
+# Regla general: acá va todo lo que se puede regenerar en cualquier máquina a
+# partir del repositorio. Si algo hay que reconstruirlo a mano, NO va acá.
+
+# --- Entorno virtual -------------------------------------------------------
+# Se reconstruye con:
+#   python3.12 -m venv .venv
+#   .venv/bin/python -m pip install -r vision/requirements.txt
+# Versionarlo sería un error: pesa cientos de MB y trae binarios compilados
+# para una sola plataforma (acá, macOS arm64), inservibles en el Windows de
+# la máquina de competencia.
+.venv/
+venv/
+env/
+
+# --- Bytecode de Python ----------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Empaquetado y herramientas -------------------------------------------
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Sistema operativo y editores -----------------------------------------
+.DS_Store
+.idea/
+*.swp
+
+# --- Artefactos propios del sistema de visión ------------------------------
+# La calibración de cámara y las grabaciones son específicas de UNA cámara y
+# UNA sesión: se generan en la máquina donde corre el sistema, no se comparten.
+# Los PERFILES de cámara (configuración) sí se versionan; lo que queda afuera
+# son los archivos que produce el proceso de calibración.
+*.mp4
+*.avi
+grabaciones/
+calibracion_*.npz
+calibracion_*.yaml

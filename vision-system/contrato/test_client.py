@@ -21,7 +21,8 @@ import argparse
 import socket
 import sys
 import time
-from typing import Any, Dict, Iterator, List, Optional
+from collections.abc import Iterator
+from typing import Any
 
 try:  # como paquete: python -m contrato.test_client
     from .schema import decodificar_ndjson, validate_message
@@ -66,7 +67,7 @@ def leer_lineas(conexion: socket.socket) -> Iterator[str]:
 # --------------------------------------------------------------------------
 
 
-def ejemplo_de_consumo(msg: Dict[str, Any]) -> List[str]:
+def ejemplo_de_consumo(msg: dict[str, Any]) -> list[str]:
     """Saca del mensaje lo que le importaría a un rover, y explica el porqué.
 
     Se llama una sola vez (con el primer mensaje) porque es didáctico, no
@@ -131,16 +132,16 @@ class Estadisticas:
         self.recibidos = 0
         self.invalidos = 0
         self.no_parseables = 0
-        self.seq_anterior: Optional[int] = None
+        self.seq_anterior: int | None = None
         self.saltos = 0
         self.mensajes_perdidos = 0
         self.lat_min = float("inf")
         self.lat_max = float("-inf")
         self.lat_suma = 0.0
         self.edad_max = 0
-        self.primeros_errores: List[str] = []
+        self.primeros_errores: list[str] = []
 
-    def registrar(self, msg: Dict[str, Any], latencia_ms: float) -> None:
+    def registrar(self, msg: dict[str, Any], latencia_ms: float) -> None:
         self.recibidos += 1
         self.lat_min = min(self.lat_min, latencia_ms)
         self.lat_max = max(self.lat_max, latencia_ms)
@@ -191,7 +192,7 @@ class Estadisticas:
 # --------------------------------------------------------------------------
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Cliente de referencia: consume, valida y mide el stream de visión."
     )

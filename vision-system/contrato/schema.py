@@ -14,16 +14,31 @@ sistema de visión publica por TCP/NDJSON y que los equipos consumen.
     cada cuadro. Así el lado productor (cámara, detectores) y el lado consumidor
     (publicación, grabación) nunca se pisan, aunque corran en relojes distintos.
 
+Piso de versión: Python 3.9
+    El contrato corre en **3.9 en adelante**, a diferencia del sistema de visión
+    (`vision/`), que exige 3.10+. La distinción es deliberada: `vision/` lo
+    corremos nosotros en estaciones controladas, pero el contrato lo corren los
+    veinte equipos en sus propias máquinas, y el Python de fábrica de macOS es
+    3.9. Excluir a un equipo por una mejora cosmética no vale la pena.
+
+    En la práctica esto significa: NO usar `slots=True` en estas dataclasses
+    (es 3.10+), ni `match`, ni nada que rompa en 3.9. Las anotaciones modernas
+    (`X | None`, `dict[str, Any]`) sí se pueden, porque `from __future__ import
+    annotations` hace que no se evalúen en tiempo de ejecución.
+
 El contrato es sagrado: ningún campo cambia de nombre, unidad o semántica sin
 subir `PROTOCOL_VERSION` y avisar a los equipos.
 """
 
+# Este import NO es un resto de compatibilidad con versiones viejas: hace que
+# las anotaciones no se evalúen en tiempo de definición, y es lo que permite
+# escribir `-> Grid` dentro de la propia clase `Grid` sin comillas.
 from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Any
 
 # --------------------------------------------------------------------------
 # Constantes del contrato
@@ -38,11 +53,11 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 PROTOCOL_VERSION = 1
 
 #: Fases de la ronda. La visión es árbitro: ella dice en qué fase se está.
-PHASES: Tuple[str, ...] = ("IDLE", "READY", "RUNNING", "FINISHED")
+PHASES: tuple[str, ...] = ("IDLE", "READY", "RUNNING", "FINISHED")
 
 #: Colores válidos de cubo. El color ES la identidad del cubo: no hay dos cubos
 #: del mismo color, por eso no llevan `id`.
-CUBE_COLORS: Tuple[str, ...] = ("green", "blue", "red")
+CUBE_COLORS: tuple[str, ...] = ("green", "blue", "red")
 
 #: Lado de una celda en milímetros. Las posiciones se expresan en celdas con
 #: decimales; multiplicar por este valor da milímetros.
@@ -70,7 +85,8 @@ _CAMPOS_DEPOT = frozenset(("color", "col", "row"))
 # Estructuras del mensaje
 #
 # Todas son `frozen`: representan una foto del mundo en un instante, y una foto
-# no se retoca. Para "cambiar" algo se construye una foto nueva.
+# no se retoca. Para "cambiar" algo se construye una foto nueva
+# (`dataclasses.replace` sirve para eso).
 # --------------------------------------------------------------------------
 
 
@@ -86,11 +102,11 @@ class Grid:
     rows: int
     cell_mm: float = CELL_MM
 
-    def a_dict(self) -> Dict[str, Any]:
+    def a_dict(self) -> dict[str, Any]:
         return {"cols": self.cols, "rows": self.rows, "cell_mm": self.cell_mm}
 
     @staticmethod
-    def desde_dict(d: Dict[str, Any]) -> "Grid":
+    def desde_dict(d: dict[str, Any]) -> Grid:
         return Grid(cols=d["cols"], rows=d["rows"], cell_mm=d["cell_mm"])
 
 
@@ -109,7 +125,7 @@ class Rover:
     theta: float  # grados, 0 = derecha, sentido antihorario
     age_ms: int  # 0 = recién visto; creciente = ocluido o no detectado
 
-    def a_dict(self) -> Dict[str, Any]:
+    def a_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "col": self.col,
@@ -119,7 +135,7 @@ class Rover:
         }
 
     @staticmethod
-    def desde_dict(d: Dict[str, Any]) -> "Rover":
+    def desde_dict(d: dict[str, Any]) -> Rover:
         return Rover(
             id=d["id"], col=d["col"], row=d["row"], theta=d["theta"], age_ms=d["age_ms"]
         )
@@ -134,11 +150,11 @@ class Cube:
     row: float
     age_ms: int
 
-    def a_dict(self) -> Dict[str, Any]:
+    def a_dict(self) -> dict[str, Any]:
         return {"color": self.color, "col": self.col, "row": self.row, "age_ms": self.age_ms}
 
     @staticmethod
-    def desde_dict(d: Dict[str, Any]) -> "Cube":
+    def desde_dict(d: dict[str, Any]) -> Cube:
         return Cube(color=d["color"], col=d["col"], row=d["row"], age_ms=d["age_ms"])
 
 
@@ -154,11 +170,11 @@ class Obstacle:
     row: float
     age_ms: int
 
-    def a_dict(self) -> Dict[str, Any]:
+    def a_dict(self) -> dict[str, Any]:
         return {"col": self.col, "row": self.row, "age_ms": self.age_ms}
 
     @staticmethod
-    def desde_dict(d: Dict[str, Any]) -> "Obstacle":
+    def desde_dict(d: dict[str, Any]) -> Obstacle:
         return Obstacle(col=d["col"], row=d["row"], age_ms=d["age_ms"])
 
 
@@ -174,11 +190,11 @@ class Start:
     col: float
     row: float
 
-    def a_dict(self) -> Dict[str, Any]:
+    def a_dict(self) -> dict[str, Any]:
         return {"col": self.col, "row": self.row}
 
     @staticmethod
-    def desde_dict(d: Dict[str, Any]) -> "Start":
+    def desde_dict(d: dict[str, Any]) -> Start:
         return Start(col=d["col"], row=d["row"])
 
 
@@ -195,11 +211,11 @@ class Depot:
     col: float
     row: float
 
-    def a_dict(self) -> Dict[str, Any]:
+    def a_dict(self) -> dict[str, Any]:
         return {"color": self.color, "col": self.col, "row": self.row}
 
     @staticmethod
-    def desde_dict(d: Dict[str, Any]) -> "Depot":
+    def desde_dict(d: dict[str, Any]) -> Depot:
         return Depot(color=d["color"], col=d["col"], row=d["row"])
 
 
@@ -217,13 +233,13 @@ class Mensaje:
     phase: str
     grid: Grid
     start: Start
-    depots: Tuple[Depot, ...] = ()
-    rovers: Tuple[Rover, ...] = ()
-    cubes: Tuple[Cube, ...] = ()
-    obstacles: Tuple[Obstacle, ...] = ()
+    depots: tuple[Depot, ...] = ()
+    rovers: tuple[Rover, ...] = ()
+    cubes: tuple[Cube, ...] = ()
+    obstacles: tuple[Obstacle, ...] = ()
     v: int = PROTOCOL_VERSION
 
-    def a_dict(self) -> Dict[str, Any]:
+    def a_dict(self) -> dict[str, Any]:
         return {
             "v": self.v,
             "seq": self.seq,
@@ -238,7 +254,7 @@ class Mensaje:
         }
 
     @staticmethod
-    def desde_dict(d: Dict[str, Any]) -> "Mensaje":
+    def desde_dict(d: dict[str, Any]) -> Mensaje:
         """Construye un `Mensaje` a partir de un dict ya parseado.
 
         Valida primero: preferimos fallar con un mensaje claro antes que
@@ -289,7 +305,7 @@ def _es_numero(valor: Any) -> bool:
     return math.isfinite(valor)
 
 
-def _revisar_campos(obj: Any, esperados: frozenset, donde: str) -> Optional[str]:
+def _revisar_campos(obj: Any, esperados: frozenset, donde: str) -> str | None:
     """Verifica que `obj` sea un dict con exactamente los campos esperados."""
     if not isinstance(obj, dict):
         return "{}: se esperaba un objeto, llegó {}".format(donde, type(obj).__name__)
@@ -303,7 +319,7 @@ def _revisar_campos(obj: Any, esperados: frozenset, donde: str) -> Optional[str]
     return None
 
 
-def _revisar_posicion(obj: Dict[str, Any], donde: str) -> Optional[str]:
+def _revisar_posicion(obj: dict[str, Any], donde: str) -> str | None:
     """Valida `col`/`row`.
 
     NO se exige que caigan dentro de la grilla: la corrección de paralaje puede
@@ -318,19 +334,19 @@ def _revisar_posicion(obj: Dict[str, Any], donde: str) -> Optional[str]:
     return None
 
 
-def _revisar_edad(obj: Dict[str, Any], donde: str) -> Optional[str]:
+def _revisar_edad(obj: dict[str, Any], donde: str) -> str | None:
     if not _es_entero(obj["age_ms"]) or obj["age_ms"] < 0:
         return "{}: 'age_ms' debe ser un entero >= 0, llegó {!r}".format(donde, obj["age_ms"])
     return None
 
 
-def _revisar_lista(msg: Dict[str, Any], nombre: str) -> Optional[str]:
+def _revisar_lista(msg: dict[str, Any], nombre: str) -> str | None:
     if not isinstance(msg[nombre], list):
         return "'{}' debe ser una lista, llegó {}".format(nombre, type(msg[nombre]).__name__)
     return None
 
 
-def validate_message(msg: Any) -> Optional[str]:
+def validate_message(msg: Any) -> str | None:
     """Valida un mensaje contra el contrato.
 
     Devuelve `None` si el mensaje cumple, o un texto claro con el PRIMER error
@@ -495,7 +511,7 @@ def codificar_ndjson(msg: Any) -> str:
     return json.dumps(msg, separators=(",", ":"), ensure_ascii=False) + "\n"
 
 
-def decodificar_ndjson(linea: str) -> Dict[str, Any]:
+def decodificar_ndjson(linea: str) -> dict[str, Any]:
     """Parsea una línea NDJSON a dict. Lanza `ValueError` si no es JSON válido.
 
     No valida el contrato: eso es trabajo de `validate_message`. Separar

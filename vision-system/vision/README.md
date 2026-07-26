@@ -8,6 +8,21 @@ telemetría que los equipos consumen.
 Este paquete puede depender de `contrato/`, pero **`contrato/` nunca depende de
 `vision/`** (ver `CLAUDE.md`, sección 4).
 
+## Piso de versión de Python: 3.10+ acá, 3.9+ en el contrato
+
+| Paquete | Piso | Quién lo corre |
+|---|---|---|
+| `vision/` | **Python 3.10+** | Nosotros, en la máquina de competencia y las estaciones de calibración |
+| `contrato/` | **Python 3.9+** | Los veinte equipos, en sus propias máquinas |
+
+La diferencia es deliberada. Acá se puede usar sintaxis moderna sin reparos
+(`slots=True` en dataclasses, `match`, etc.) porque el entorno lo controlamos
+nosotros. En `contrato/` no: el Python de fábrica de macOS es 3.9, y subir ese
+piso dejaría afuera a equipos por una mejora cosmética.
+
+Entorno de desarrollo: `vision-system/.venv` (Python 3.12), creado con
+`python3.12 -m venv .venv` e instalado con `pip install -r vision/requirements.txt`.
+
 ## Flujo: productores → interfaz → consumidores
 
 El sistema tiene un flujo **en una sola dirección** (ver `CLAUDE.md`, sección 3):

@@ -37,6 +37,16 @@ unidad o semántica es un cambio de contrato.
 
 ## Cómo se corre
 
+Requiere **Python 3.9+** y nada más (sin dependencias externas).
+
+> **Piso de versión más bajo que el resto del proyecto, a propósito.** El
+> sistema de visión (`vision/`) exige **3.10+**; el contrato se conforma con
+> **3.9**. La razón: `vision/` lo corremos nosotros en estaciones controladas,
+> pero el contrato lo corren los veinte equipos en sus propias máquinas, y el
+> Python de fábrica de macOS es 3.9. Al tocar `contrato/` hay que respetar ese
+> piso: nada de `slots=True` en dataclasses, `match`, ni sintaxis 3.10+ que se
+> evalúe en tiempo de ejecución.
+
 En una terminal, el simulador:
 
 ```bash

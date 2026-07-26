@@ -1,6 +1,6 @@
 # Dependencias del paquete `contrato`.
 #
-# El contrato y su simulador corren con PYTHON PURO (3.10+): usan solo la
+# El contrato y su simulador corren con PYTHON PURO (3.9+): usan solo la
 # biblioteca estándar (json, socket, dataclasses, etc.). Por ahora NO requieren
 # ninguna dependencia externa. Esta ausencia es intencional y mantiene al
 # contrato liviano y entregable por sí solo (ver CLAUDE.md, secciones 4 y 8).
