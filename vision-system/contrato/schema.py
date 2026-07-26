@@ -16,10 +16,12 @@ sistema de visión publica por TCP/NDJSON y que los equipos consumen.
 
 Piso de versión: Python 3.9
     El contrato corre en **3.9 en adelante**, a diferencia del sistema de visión
-    (`vision/`), que exige 3.10+. La distinción es deliberada: `vision/` lo
-    corremos nosotros en estaciones controladas, pero el contrato lo corren los
-    veinte equipos en sus propias máquinas, y el Python de fábrica de macOS es
-    3.9. Excluir a un equipo por una mejora cosmética no vale la pena.
+    (`vision/`), que exige 3.10+. La distinción es deliberada y la explica quién
+    pone el intérprete: `vision/` se instala con un instalador que trae su propio
+    Python embebido, así que su versión no depende de la máquina. El contrato se
+    entrega suelto y sin instalador: cada equipo lo corre con el Python que ya
+    tiene, y el de fábrica de macOS es 3.9. Excluir a un equipo por una mejora
+    cosmética no vale la pena.
 
     En la práctica esto significa: NO usar `slots=True` en estas dataclasses
     (es 3.10+), ni `match`, ni nada que rompa en 3.9. Las anotaciones modernas

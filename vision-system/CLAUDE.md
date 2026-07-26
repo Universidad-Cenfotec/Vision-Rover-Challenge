@@ -170,9 +170,14 @@ Vision-Rover-Challenge/          # raíz del repositorio (fork)
 
 ## 6. Estándares de código
 
-- **Python:** `contrato/` requiere **3.9+** (lo corren los equipos en sus máquinas;
-  piso bajo a propósito para no excluir a nadie). `vision/` requiere **3.10+**
-  (lo corro yo y las estaciones controladas; puede usar sintaxis moderna sin reparos).
+- **Python:** `vision/` requiere **3.10+**; `contrato/` requiere **3.9+**.
+  La diferencia está en **quién pone el intérprete**:
+  - `vision/` se instala con su **propio Python embebido** en el instalador, así
+    que la versión **no depende de la máquina donde se instale**. Puede usar
+    sintaxis moderna sin reparos.
+  - `contrato/` se entrega **suelto, sin instalador**: cada equipo lo corre con el
+    Python que ya tiene, y el de fábrica de macOS es 3.9. Piso bajo a propósito
+    para no excluir a nadie.
 - **Dependencias de visión:** `opencv-contrib-python` y `numpy`, con versiones
   fijadas. **Nada más sin pedirlo.** El `contrato/` no tiene ninguna: corre con
   biblioteca estándar pura.
@@ -202,13 +207,20 @@ Vision-Rover-Challenge/          # raíz del repositorio (fork)
 
 ## 8. Despliegue
 
-- El sistema corre en **Docker sobre Windows** en la máquina de competencia,
-  con un **puente de captura nativo** para la webcam.
-- Los equipos instalan el **sistema nativo en Windows** con un **instalador de un clic**
-  y **autodiagnóstico**.
-- El **contrato** y el **simulador** se entregan **aparte, livianos**,
-  para correr con **Python directo**.
-- Las **herramientas visuales** (calibración, monitor) corren **nativas fuera de Docker**.
+- **Un solo sistema, nativo. Sin Docker.** El sistema de visión se instala y corre
+  de la **misma forma en todas las máquinas**: la mía y las de los estudiantes.
+  **No hay dos caminos de despliegue**, ni contenedor, ni puente de captura.
+- El sistema **accede a la webcam USB directamente**, sin capa intermedia.
+- **Objetivo: Windows** en las máquinas de los estudiantes.
+- **La instalación tiene que ser lo más simple posible.** Es un objetivo
+  importante, no un detalle: **instalador fácil, de un clic**, con
+  **autodiagnóstico** que verifique cámara, dependencias y permisos, y diga en
+  lenguaje claro qué falta. Veinte equipos con veinte niveles de experiencia
+  distintos tienen que poder instalarlo sin ayuda.
+- Las **herramientas visuales** (calibración, monitor) corren **nativas**, como
+  todo lo demás.
+- El **contrato** y el **simulador** se entregan **aparte, livianos**, para correr
+  con **Python directo** y desarrollar **sin cámara**.
 
 ---
 

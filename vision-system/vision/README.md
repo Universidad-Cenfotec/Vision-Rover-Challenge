@@ -10,15 +10,21 @@ Este paquete puede depender de `contrato/`, pero **`contrato/` nunca depende de
 
 ## Piso de versión de Python: 3.10+ acá, 3.9+ en el contrato
 
-| Paquete | Piso | Quién lo corre |
+| Paquete | Piso | Quién pone el intérprete |
 |---|---|---|
-| `vision/` | **Python 3.10+** | Nosotros, en la máquina de competencia y las estaciones de calibración |
-| `contrato/` | **Python 3.9+** | Los veinte equipos, en sus propias máquinas |
+| `vision/` | **Python 3.10+** | El **instalador**, que trae su propio Python embebido |
+| `contrato/` | **Python 3.9+** | **Cada equipo**, con el Python que ya tenga instalado |
 
-La diferencia es deliberada. Acá se puede usar sintaxis moderna sin reparos
-(`slots=True` en dataclasses, `match`, etc.) porque el entorno lo controlamos
-nosotros. En `contrato/` no: el Python de fábrica de macOS es 3.9, y subir ese
-piso dejaría afuera a equipos por una mejora cosmética.
+La diferencia es deliberada, y la explica **quién pone el intérprete**.
+
+`vision/` se instala siempre de la misma forma —nativo, con un instalador que
+trae su propio Python—, así que la versión **no depende de la máquina donde se
+instale**. Por eso acá se puede usar sintaxis moderna sin reparos (`slots=True`
+en dataclasses, `match`, etc.).
+
+`contrato/` se entrega **suelto, sin instalador**: cada equipo lo corre con el
+Python que ya tiene, y el de fábrica de macOS es 3.9. Subir ese piso dejaría
+afuera a equipos por una mejora cosmética.
 
 Entorno de desarrollo: `vision-system/.venv` (Python 3.12), creado con
 `python3.12 -m venv .venv` e instalado con `pip install -r vision/requirements.txt`.
@@ -65,7 +71,7 @@ haber; cada carpeta tiene su propio README con el detalle:
 | `tracking/` | Productor | Identidad, oclusión y edad | ⚪ vacío |
 | `publish/` | Consumidor | Publicación TCP/NDJSON | ⚪ vacío (el comportamiento ya está probado en el simulador del contrato) |
 | `record/` | Consumidor | Grabación a disco | ⚪ vacío |
-| `tools/` | Herramientas | Puesta a punto, fuera de Docker | 🟢 **verificación de geometría** · ⚪ calibración y monitor |
+| `tools/` | Herramientas | Puesta a punto | 🟢 **verificación de geometría** · ⚪ calibración y monitor |
 
 🟢 hay código funcionando · ⚪ planificado, sin código aún
 

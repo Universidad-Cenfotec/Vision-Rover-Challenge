@@ -1,8 +1,8 @@
 # tools/
 
-**Herramientas visuales.** Utilidades nativas que corren **fuera de Docker** y
-apoyan la puesta a punto. No forman parte del flujo de publicación: nada de lo
-que hay acá se ejecuta durante una ronda.
+**Herramientas visuales.** Utilidades que apoyan la puesta a punto. No forman
+parte del flujo de publicación: nada de lo que hay acá se ejecuta durante una
+ronda.
 
 ## Lo que ya existe
 

@@ -68,9 +68,11 @@ Después escribí `ready` y luego `start` en la terminal 1.
 
 **Piso de versión más bajo que el resto del proyecto, a propósito.** El sistema
 de visión (`vision/`) exige **Python 3.10+**; el contrato se conforma con
-**3.9**. La razón: `vision/` lo corremos nosotros en estaciones controladas,
-pero el contrato lo corren los veinte equipos en sus propias máquinas, y el
-Python de fábrica de macOS es 3.9.
+**3.9**. La razón está en **quién pone el intérprete**: `vision/` se instala con
+un instalador que trae **su propio Python embebido**, así que su versión no
+depende de la máquina; el contrato, en cambio, se entrega **suelto y sin
+instalador**, y cada equipo lo corre con el Python que ya tiene —el de fábrica de
+macOS es 3.9.
 
 Al tocar `contrato/` hay que respetar ese piso: **nada de `slots=True` en
 dataclasses, `match`, ni sintaxis 3.10+ que se evalúe en tiempo de ejecución**.
