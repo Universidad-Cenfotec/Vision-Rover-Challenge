@@ -470,6 +470,14 @@ class Publicador:
         self._lock = threading.Lock()
         self._servidor: socket.socket | None = None
         self._parar = threading.Event()
+        # Se guardan los hilos para poder ESPERARLOS al apagar. Son daemon para
+        # que un cliente colgado no impida salir, pero un daemon que sigue vivo
+        # cuando el intérprete se apaga puede quedar a mitad de un `print()` y
+        # hacer abortar el proceso ("could not acquire lock for <stdout> at
+        # interpreter shutdown"). La salida ordenada los espera; el ser daemon
+        # queda solo como red de seguridad.
+        self._hilo_aceptar: threading.Thread | None = None
+        self._hilos_cliente: list[threading.Thread] = []
 
     def arrancar(self) -> None:
         self._servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -477,7 +485,8 @@ class Publicador:
         self._servidor.bind((self.host, self.port))
         self._servidor.listen(8)
         self._servidor.settimeout(0.5)
-        threading.Thread(target=self._aceptar, name="aceptar", daemon=True).start()
+        self._hilo_aceptar = threading.Thread(target=self._aceptar, name="aceptar", daemon=True)
+        self._hilo_aceptar.start()
 
     def _aceptar(self) -> None:
         while not self._parar.is_set():
@@ -491,12 +500,14 @@ class Publicador:
             # justo donde más molesta.
             conexion.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             ranura = RanuraCliente(direccion)
+            hilo = threading.Thread(
+                target=self._atender, args=(conexion, ranura), name="cliente", daemon=True
+            )
             with self._lock:
                 self._ranuras.append(ranura)
+                self._hilos_cliente.append(hilo)
             print("[cliente] conectado {}:{}".format(*direccion))
-            threading.Thread(
-                target=self._atender, args=(conexion, ranura), name="cliente", daemon=True
-            ).start()
+            hilo.start()
 
     def _atender(self, conexion: socket.socket, ranura: RanuraCliente) -> None:
         """Un hilo por cliente: lo único que puede bloquearse es él mismo."""
@@ -538,16 +549,33 @@ class Publicador:
         with self._lock:
             return sum(r.pisados for r in self._ranuras)
 
-    def detener(self) -> None:
+    def detener(self, timeout: float = 3.0) -> None:
+        """Apaga el servidor y ESPERA a que sus hilos terminen.
+
+        Esperar no es un lujo: los hilos de cliente imprimen su línea de
+        despedida en el `finally`. Si el proceso terminara sin esperarlos, uno
+        podría quedar a mitad de ese `print()` justo cuando el intérprete se
+        apaga, y Python aborta con un error fatal de bloqueo de `stdout`. Un
+        `join` de tres segundos lo vuelve imposible.
+        """
         self._parar.set()
         with self._lock:
             for ranura in self._ranuras:
                 ranura.cerrar()
+            hilos = list(self._hilos_cliente)
+        # Cerrar el socket de escucha desbloquea el `accept()` del hilo aceptador.
         if self._servidor is not None:
             try:
                 self._servidor.close()
             except OSError:
                 pass
+        # Los `join` van FUERA del lock: el `finally` de cada hilo de cliente lo
+        # necesita para desregistrarse, y esperarlos con el lock tomado sería un
+        # abrazo mortal.
+        if self._hilo_aceptar is not None:
+            self._hilo_aceptar.join(timeout)
+        for hilo in hilos:
+            hilo.join(timeout)
 
 
 # --------------------------------------------------------------------------
@@ -705,15 +733,20 @@ def main(argv: list[str] | None = None) -> int:
     print("Comandos: ready | start | stop | quit")
     print("=" * 66)
 
-    threading.Thread(
+    hilo_sim = threading.Thread(
         target=_hilo_simulacion, args=(sim, fase, estado, salir), name="sim", daemon=True
-    ).start()
-    threading.Thread(
+    )
+    hilo_pub = threading.Thread(
         target=_hilo_publicacion,
         args=(pub, cfg, estado, salir, contador),
         name="pub",
         daemon=True,
-    ).start()
+    )
+    hilo_sim.start()
+    hilo_pub.start()
+    # El hilo de teclado NO se espera al salir: queda bloqueado leyendo la
+    # entrada estándar y no hay forma portable de desbloquearlo. Es seguro
+    # dejarlo, porque estando bloqueado en la lectura no puede estar imprimiendo.
     threading.Thread(target=_hilo_teclado, args=(fase, salir), name="teclado", daemon=True).start()
 
     try:
@@ -730,9 +763,16 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        # Apagado ordenado. El orden importa: primero se avisa a todos que paren,
+        # después se espera a cada hilo que pueda estar escribiendo en pantalla, y
+        # recién al final imprime el hilo principal. Así ningún hilo queda a mitad
+        # de un `print()` cuando el intérprete se apaga.
         salir.set()
+        hilo_sim.join(3.0)
+        hilo_pub.join(3.0)
         pub.detener()
         print("\nSimulador detenido. Mensajes publicados: {}".format(contador[0]))
+        sys.stdout.flush()
     return 0
 
 
