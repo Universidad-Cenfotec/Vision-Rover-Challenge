@@ -10,6 +10,12 @@ Lo que está acá **no cambia por sorpresa**. Si algo tiene que cambiar, sube el
 número de versión (`v`) y se les avisa. Pueden escribir código contra este
 formato con confianza.
 
+> ### 🚀 ¿Nunca corriste esto? Empezá por la [sección 7](#7-herramientas-incluidas-y-cómo-correrlas)
+>
+> Ahí está la guía paso a paso para pasar de "tengo la carpeta" a "veo
+> telemetría en pantalla", sin dar por sabido nada de línea de comandos.
+> Las secciones 1 a 6 describen **el formato**; la 7 explica **cómo correrlo**.
+
 ---
 
 ## 1. Cómo se conectan
@@ -52,6 +58,54 @@ Está implementado así en [`test_client.py`](test_client.py), listo para copiar
 Reconecten. La visión acepta clientes en cualquier momento y les manda el estado
 actual: **no hay que ponerse al día con nada**, porque no existe historial. El
 primer mensaje que reciben ya es el presente.
+
+### Conectarse desde el robot: la IP importa
+
+En todos los ejemplos de este documento aparece `127.0.0.1`. Esa dirección
+significa **"esta misma computadora"** y solo sirve para probar el simulador y
+el cliente en una sola máquina.
+
+**Un robot nunca se conecta a `127.0.0.1`.** El rover es otro aparato, en otro
+lugar de la red: tiene que apuntar a la **IP de la computadora donde corre la
+visión** (o el simulador).
+
+**1. Averiguá la IP de la máquina de visión.** En esa computadora, ejecutá:
+
+| Sistema | Comando |
+|---|---|
+| Windows (PowerShell) | `ipconfig` → mirá "Dirección IPv4" del adaptador de Wi-Fi |
+| macOS | `ipconfig getifaddr en0` |
+| Linux | `hostname -I` |
+
+Te va a dar algo como `192.168.1.47`. **Esa** es la dirección que va en el
+código del robot, junto con el puerto `2026`.
+
+**2. Los dos tienen que estar en la misma red.** El robot y la computadora de
+visión deben estar conectados al **mismo Wi-Fi**. Si el robot está en la red de
+invitados y la computadora en otra, no se van a ver aunque la IP esté bien.
+
+**3. Si no conecta, sospechá del firewall.** El cortafuegos de Windows suele
+bloquear conexiones entrantes la primera vez. Hay que permitirle a Python
+aceptar conexiones en redes privadas.
+
+**4. Probá primero desde otra computadora**, antes de pelearte con el robot:
+
+```bash
+python3 test_client.py --host 192.168.1.47 --port 2026
+```
+
+Si eso funciona desde otra máquina de la red, el problema no es la visión: es el
+código o la red del robot.
+
+> **Qué viene después: el cliente de referencia del robot.** El cliente que
+> vamos a entregar para el rover está pensado en **CircuitPython, sobre
+> ESP32/IdeaBoard** (no Arduino). Todavía **no está incluido en esta carpeta**;
+> se va a agregar más adelante.
+>
+> Mientras tanto, el ejemplo probado y funcionando es el de la sección 7: abrir
+> un socket TCP contra `IP:2026`, acumular en un buffer, cortar por `\n` y
+> parsear con `json`. Eso es todo lo que necesita el rover; lo único que cambia
+> en la placa es la parte de conectarse al Wi-Fi.
 
 ---
 
@@ -380,47 +434,416 @@ Es una línea y les evita interpretar mal un mensaje del futuro.
 
 ---
 
-## 7. Herramientas incluidas
+## 7. Herramientas incluidas y cómo correrlas
 
 Todo corre con **Python puro**: sin OpenCV, sin cámara, sin instalar nada.
 
-> **Requisito: Python 3.9 o superior.** Es lo único que hace falta — no hay
-> dependencias externas que instalar. Verifiquen con `python3 --version`.
+Esta sección está escrita para alguien que **nunca usó la línea de comandos**.
+Si ya te manejás, andá directo a "Resumen para tener a mano" al final.
+
+---
+
+### Paso 1 — Comprobá que tenés Python
+
+Necesitás **Python 3.9 o superior**. El piso es bajo a propósito, para que te
+sirva el que ya tenés: el que viene de fábrica en macOS es 3.9 y alcanza.
+
+Abrí una terminal:
+
+- **Windows:** apretá la tecla Windows, escribí `PowerShell`, Enter.
+- **macOS:** apretá `Cmd + Espacio`, escribí `Terminal`, Enter.
+- **Linux:** `Ctrl + Alt + T`.
+
+Escribí este comando y apretá Enter:
+
+| Sistema | Comando |
+|---|---|
+| **Windows** | `python --version` |
+| **macOS / Linux** | `python3 --version` |
+
+Tiene que responder `Python 3.9.x` o un número mayor.
+
+> **⚠️ `python` y `python3` no son lo mismo.** En macOS y Linux el comando casi
+> siempre es **`python3`**: si escribís `python` a secas te va a decir
+> `command not found`. En Windows suele ser **`python`**.
 >
-> El piso es 3.9 a propósito, para que les sirva el Python que ya tienen: el que
-> viene de fábrica en macOS es 3.9 y alcanza. Si su versión es más nueva,
-> también anda.
+> **Regla simple: usá de ahora en adelante el mismo nombre que te funcionó
+> acá.** En todo este documento verás `python3`; si estás en Windows,
+> reemplazalo mentalmente por `python` en cada comando.
+>
+> Si en Windows `python` no anda, probá `py` — algunas instalaciones usan ese.
 
-### `schema.py` — el contrato en código
+Si no tenés Python o es muy viejo, bajalo de
+[python.org/downloads](https://www.python.org/downloads/).
 
-Las constantes y la validación. Si programan en Python, **importen de acá** en
-vez de escribir los literales a mano:
+---
 
-```python
-from contrato.schema import PROTOCOL_VERSION, PHASES, CUBE_COLORS, CELL_MM, validate_message
+### Paso 2 — Pararte en la carpeta correcta
 
-error = validate_message(msg)
-if error is not None:
-    print("mensaje inválido:", error)
-```
+**Este es el paso donde más gente se traba.** La terminal siempre está "parada"
+en alguna carpeta, y los comandos solo funcionan desde la carpeta correcta.
 
-`validate_message` devuelve `None` si el mensaje cumple, o un texto con el error
-si no. **No lanza excepción**, para que puedan descartar un mensaje malo y
-seguir andando.
+Tenés que pararte **dentro de la carpeta `contrato`** (la que contiene
+`mock_publisher.py`). Escribí `cd `, un espacio, y **arrastrá la carpeta desde
+el explorador de archivos hasta la ventana de la terminal**: se pega sola la
+ruta. Después Enter.
 
-### `mock_publisher.py` — el simulador
-
-Publica telemetría sintética con **el mismo formato** que el sistema real, para
-que desarrollen sin cancha:
+Te va a quedar algo así:
 
 ```bash
-python -m contrato.mock_publisher
+cd "/Users/tu-usuario/Descargas/contrato"        # macOS / Linux
+cd "C:\Users\tu-usuario\Downloads\contrato"      # Windows
 ```
 
-Comandos por teclado, mientras corre: `ready`, `start`, `stop`, `quit`. Son las
-transiciones de fase, para que prueben cómo reacciona su rover.
+> **Las comillas importan** si la ruta tiene espacios. Sin comillas, la terminal
+> cree que le pasás varias cosas y falla.
 
-**El simulador miente feo a propósito.** Reproduce las patologías reales:
+Para confirmar que estás donde tenés que estar:
+
+| Sistema | Comando | Qué tiene que aparecer |
+|---|---|---|
+| **Windows** | `dir` | la lista de archivos, con `mock_publisher.py` entre ellos |
+| **macOS / Linux** | `ls` | ídem |
+
+**Si no ves `mock_publisher.py` en esa lista, no sigas**: estás en otra carpeta
+y todo lo demás va a fallar.
+
+---
+
+### Paso 3 — Levantar el simulador (terminal 1)
+
+```bash
+python3 mock_publisher.py
+```
+
+*(En Windows: `python mock_publisher.py`.)*
+
+**Lo que tenés que ver si arrancó bien:**
+
+```
+==================================================================
+Simulador del Vision-Rover-Challenge — protocolo v1
+Publicando NDJSON en 0.0.0.0:2026 a 20 Hz
+Cancha: 50x50 celdas de 20 mm
+Comandos: ready | start | stop | quit
+==================================================================
+```
+
+Y cada 5 segundos, una línea de estado:
+
+```
+[estado] fase=IDLE seq=94 clientes=0 pisados=0
+```
+
+Que se lee: *estoy en fase IDLE, ya publiqué 94 mensajes, no hay nadie
+conectado.*
+
+> ### ⚠️ La terminal queda ocupada y parece congelada. **Está bien.**
+>
+> Después del cartel no vas a poder escribir otros comandos ahí, y no vuelve a
+> aparecer el símbolo del sistema. **No se colgó.** El simulador está corriendo,
+> publicando 20 mensajes por segundo, y esa terminal ahora le pertenece.
+>
+> Dejala abierta y **no la toques**. Todo lo demás va en una segunda terminal.
+
+---
+
+### Paso 4 — Conectar el cliente (terminal 2)
+
+Hace falta **una segunda ventana de terminal**, porque la primera está ocupada
+con el simulador.
+
+**Cómo abrir la segunda:**
+
+- **Windows:** abrí PowerShell de nuevo desde el menú Inicio.
+- **macOS:** con la Terminal en primer plano, `Cmd + N`.
+- **Linux:** `Ctrl + Alt + T` otra vez.
+
+**Importante: en esta terminal nueva hay que repetir el Paso 2.** Cada ventana
+arranca en su propia carpeta y no hereda nada de la otra. Volvé a hacer `cd` a
+la carpeta `contrato`.
+
+Y ahora sí:
+
+```bash
+python3 test_client.py
+```
+
+**Lo que tenés que ver si conectó bien:**
+
+```
+Conectando a 127.0.0.1:2026 ...
+Conectado. Ctrl-C para cortar.
+
+--- primer mensaje: ejemplo de consumo -------------------------
+  cancha: 50x50 celdas de 20.0 mm  |  fase: IDLE
+  rover id=10  col=3.99 row=3.94 theta=46.0°  age=0 ms
+  rover id=11  col=3.98 row=8.00 theta=43.7°  age=0 ms
+  cubo green en (29.95, 12.03) -> depot (47.50, 2.50)  age=0 ms
+  cubo blue  en (17.99, 34.04) -> depot (2.50, 47.50)  age=0 ms
+  cubo red   en (37.99, 29.95) -> depot (47.50, 47.50)  age=0 ms
+  obstáculo amarillo en (24.99, 24.99)
+  obstáculo amarillo en (11.96, 19.96)
+  obstáculo amarillo en (35.99, 18.11)
+  salida en (2.50, 2.50)
+---------------------------------------------------------------
+
+[  2.0s] recibidos=38 invalidos=0 saltos=0 (perdidos=0)  latencia min/prom/max = 2/19/39 ms  age_max=39 ms
+```
+
+**Cómo leer esas cifras:**
+
+| Dato | Qué significa | Qué esperar |
+|---|---|---|
+| `recibidos` | mensajes que llegaron | sube sin parar, ~20 por segundo |
+| `invalidos` | mensajes que violaron el contrato | **tiene que ser 0** |
+| `saltos` | veces que se salteó un número de secuencia | normal que haya algunos |
+| `latencia` | cuánto tardó el dato en llegar, en milisegundos | decenas de ms |
+
+Y en la **terminal 1** vas a ver aparecer la confirmación del otro lado:
+
+```
+[cliente] conectado 127.0.0.1:54087
+```
+
+Si ves eso, **funciona**. Ya estás recibiendo telemetría.
+
+---
+
+### Paso 5 — Controlar la fase de la ronda
+
+Los comandos se escriben **en la terminal 1, la del simulador**, uno por vez, y
+se aprieta **Enter**. El simulador hace de **árbitro**: él decide en qué fase
+está la ronda.
+
+| Escribís | Deja la fase en | Qué significa | Qué hacen los robots |
+|---|---|---|---|
+| `ready` | `READY` | Cancha lista, robots en la salida | Quietos |
+| `start` | `RUNNING` | **¡Arrancó la ronda!** | Se mueven |
+| `stop` | `FINISHED` | Se terminó | Frenan de inmediato |
+| `quit` | — | Apaga el simulador | — |
+
+El orden natural es **`ready` → `start` → `stop`**. Para otra ronda, `ready` de
+nuevo.
+
+Cada vez que escribís uno, el simulador te confirma en pantalla:
+
+```
+[fase] fase: IDLE -> READY
+[fase] fase: READY -> RUNNING
+[fase] fase: RUNNING -> FINISHED
+```
+
+Ese `fase: X -> Y` es la prueba de que te escuchó.
+
+> **Equivocarte de orden no rompe nada.** Si escribís `start` sin haber hecho
+> `ready`, te responde:
+>
+> ```
+> [fase] 'start' no es válido desde IDLE (se puede desde ['READY'])
+> ```
+>
+> y sigue funcionando normal. Probá tranquilo.
+
+El campo `phase` del mensaje cambia al instante, así que podés ver en el cliente
+cómo reacciona tu código a cada fase. Qué significa cada una en detalle está en
+la **sección 5**.
+
+---
+
+### Paso 6 — Cerrar todo
+
+**Para cerrar el cliente (terminal 2):** apretá **`Ctrl + C`**. Te imprime un
+resumen final y volvés al símbolo del sistema.
+
+**Para cerrar el simulador (terminal 1):** dos formas, las dos válidas.
+
+- Escribí **`quit`** y Enter. Es la forma prolija.
+- O apretá **`Ctrl + C`**.
+
+En ambos casos te despide con:
+
+```
+Simulador detenido. Mensajes publicados: 465
+```
+
+Podés cerrar el simulador **aunque el cliente siga conectado**: espera a que
+todos terminen antes de salir.
+
+> **`Ctrl + C` no es "copiar" en la terminal.** Es la señal de "interrumpí lo
+> que estás haciendo". Para copiar texto en una terminal se usa `Ctrl + Shift +
+> C` en Windows/Linux, o `Cmd + C` en macOS.
+
+---
+
+### Problemas frecuentes
+
+#### `No se pudo conectar: [Errno 61] Connection refused`
+
+**Qué pasó:** el cliente no encontró a nadie escuchando.
+
+**Causa casi siempre:** arrancaste el cliente **antes** que el simulador, o el
+simulador se cerró.
+
+**Solución:** andá a la terminal 1 y confirmá que el simulador esté corriendo
+(tiene que estar mostrando líneas `[estado] ...`). Si no, levantalo primero.
+**El orden importa: primero el simulador, después el cliente.**
+
+*(En Windows el número puede ser `[WinError 10061]`; es el mismo problema.)*
+
+#### `OSError: [Errno 48] Address already in use`
+
+**Qué pasó:** el puerto 2026 ya está ocupado. Aparece con varias líneas de texto
+técnico; **no rompiste nada**.
+
+**Causa:** ya hay otro simulador corriendo — típicamente uno de antes que quedó
+abierto en otra ventana.
+
+**Solución:** buscá la ventana donde quedó corriendo y cerralo con `quit`. Si no
+la encontrás, cerrá todas las terminales y volvé a empezar.
+
+*(En Windows el número es `[WinError 10048]`.)*
+
+#### `No module named 'contrato'`
+
+**Qué pasó:** estás parado en la carpeta equivocada.
+
+**Causa:** ese error sale al usar el comando `python3 -m contrato.mock_publisher`
+desde **adentro** de la carpeta `contrato`. Esa forma solo funciona desde la
+carpeta **de arriba**.
+
+**Solución:** usá la forma simple de esta guía, que anda desde adentro de
+`contrato`:
+
+```bash
+python3 mock_publisher.py
+```
+
+#### `command not found: python` / `'python' no se reconoce...`
+
+**Qué pasó:** ese nombre de comando no existe en tu sistema.
+
+**Solución:** en macOS y Linux probá **`python3`**. En Windows probá **`python`**
+y, si tampoco, **`py`**. Usá el que te haya funcionado en el Paso 1.
+
+#### El simulador arrancó pero no pasa nada / parece congelado
+
+**No está congelado.** Es lo normal: la terminal queda ocupada por el programa.
+Fijate que cada 5 segundos aparezca una línea `[estado] ...`. Si aparece, está
+vivo. El cliente va en **otra** ventana.
+
+#### El cliente conecta pero los rovers no se mueven
+
+Están quietos porque la ronda no arrancó. Andá a la terminal 1 y escribí
+`ready`, Enter, después `start`, Enter.
+
+---
+
+### Tu propio código: consumir la telemetría
+
+Todo lo que necesitás está en el JSON que llega por la red. **No hay ninguna
+biblioteca que instalar, ni ningún archivo de esta carpeta que importar.** Se
+abre un socket, se leen líneas, se parsea cada una con las herramientas
+estándar del lenguaje, y se leen los campos.
+
+Este es **el** ejemplo. Corre tal cual contra el simulador:
+
+```python
+import json
+import socket
+
+HOST = "127.0.0.1"       # IP de la máquina donde corre la visión (ver sección 1)
+PORT = 2026
+MI_ID_ARUCO = 10         # el ID del marcador pegado a TU robot
+
+conexion = socket.create_connection((HOST, PORT))
+buffer = b""
+
+while True:
+    trozo = conexion.recv(4096)
+    if not trozo:
+        break                                   # la visión cerró la conexión
+    buffer += trozo
+
+    while b"\n" in buffer:
+        linea, buffer = buffer.split(b"\n", 1)
+        mensaje = json.loads(linea)
+
+        if mensaje["v"] != 1:                   # versión desconocida: descartar
+            continue
+        if mensaje["phase"] != "RUNNING":       # fuera de la ronda no se juega
+            continue
+
+        # Mi rover se BUSCA por id. Nunca se indexa por posición: el orden de
+        # la lista no está garantizado y la cantidad cambia entre mensajes.
+        mi_rover = None
+        for rover in mensaje["rovers"]:
+            if rover["id"] == MI_ID_ARUCO:
+                mi_rover = rover
+        if mi_rover is None:
+            continue                            # este cuadro no me vio
+
+        # Cada cubo va al depot de SU color: se cruzan las dos listas por color.
+        depots = {}
+        for depot in mensaje["depots"]:
+            depots[depot["color"]] = depot
+
+        print("fase={}  mi rover: col={:.2f} row={:.2f} theta={:.1f}".format(
+            mensaje["phase"], mi_rover["col"], mi_rover["row"], mi_rover["theta"]))
+
+        for cubo in mensaje["cubes"]:
+            if cubo["age_ms"] > 1500:
+                continue                        # dato viejo: seguramente tapado
+            destino = depots[cubo["color"]]
+            print("   cubo {:<5} en ({:.2f}, {:.2f})  ->  depot ({:.2f}, {:.2f})".format(
+                cubo["color"], cubo["col"], cubo["row"], destino["col"], destino["row"]))
+
+        for obstaculo in mensaje["obstacles"]:
+            pass                                # ... esquivarlos ...
+```
+
+**Probalo ahora mismo:** guardá eso como `mi_cliente.py`, dejá el simulador
+corriendo (Paso 3), corrélo con `python3 mi_cliente.py` y escribí `start` en la
+terminal del simulador. Vas a ver:
+
+```
+fase=RUNNING  mi rover: col=13.66 row=3.38 theta=345.1
+   cubo green en (30.03, 11.97)  ->  depot (47.50, 2.50)
+   cubo blue  en (18.02, 33.96)  ->  depot (2.50, 47.50)
+   cubo red   en (37.98, 29.99)  ->  depot (47.50, 47.50)
+```
+
+**Detalles que importan de ese ejemplo, y por qué:**
+
+| Qué hace | Por qué |
+|---|---|
+| Acumula en `buffer` y corta por `\n` | TCP no respeta los límites de los mensajes (sección 1) |
+| Descarta si `v` no es 1 | formato desconocido: no adivinar |
+| No hace nada fuera de `RUNNING` | moverse fuera de la ronda es infracción (sección 5) |
+| **Busca el rover por `id`**, no por posición | el orden de las listas no está garantizado (sección 6.1) |
+| **Cruza cubos y depots por `color`** | el color es la identidad del cubo |
+| Ignora cubos con `age_ms` alto | están tapados: el dato es viejo (sección 6.2) |
+
+> **Si no imprime nada**, es porque la ronda no arrancó: escribí `start` en la
+> terminal del simulador. Y si te sale `ConnectionRefusedError`, el simulador no
+> está corriendo — mirá "Problemas frecuentes" acá arriba.
+
+> **En el robot es exactamente lo mismo.** El rover corre **CircuitPython** sobre
+> ESP32, que también trae `json` y sockets: la telemetría se parsea igual, con
+> las herramientas estándar del lenguaje. Lo único distinto es la parte de
+> conectar la placa al Wi-Fi, y que la dirección ya no es `127.0.0.1` sino la IP
+> de la máquina de visión (sección 1).
+
+Las reglas completas de consumo —qué hacer con `age_ms`, cómo medir latencia,
+por qué quedarse siempre con el último mensaje— están en la **sección 6**.
+
+---
+
+### Las herramientas, en detalle
+
+#### `mock_publisher.py` — el simulador
+
+**Miente feo a propósito.** Reproduce las patologías reales:
 
 - **ruido** en posición y orientación;
 - **oclusiones**: un rover que pasa sobre un cubo lo tapa, y el `age_ms` del
@@ -428,42 +851,61 @@ transiciones de fase, para que prueben cómo reacciona su rover.
 - **pérdidas** ocasionales de detección de un rover;
 - **cubos que se mueven** cuando un rover los empuja.
 
-Si su código anda contra el simulador, tiene chance en la cancha. Si el ruido
+Si tu código anda contra el simulador, tiene chance en la cancha. Si el ruido
 del simulador lo rompe, la cancha lo va a romper igual.
 
 Todo lo configurable está en [`config_simulador.json`](config_simulador.json):
 tamaño de grilla, IDs de los rovers, cuántos cubos y de qué color, posiciones de
-`start` y `depots`, nivel de ruido y tasa de publicación. Editen ese archivo,
-no el código, para probar otros escenarios.
+`start` y `depots`, nivel de ruido y tasa de publicación. Editá ese archivo, no
+el código, para probar otros escenarios.
 
-### `test_client.py` — cliente de referencia
+#### `test_client.py` — cliente de referencia
 
-Ejemplo mínimo y funcional de consumo. Se conecta, parsea, **valida cada mensaje**
-y mide latencia y saltos de secuencia:
-
-```bash
-python -m contrato.test_client --host 127.0.0.1 --port 2026
-```
-
-Úsenlo de dos formas: como **punto de partida** para su propio cliente, y como
-**diagnóstico** — si no están seguros de si el problema es suyo o de la red,
-corran esto al lado y comparen.
-
-### Probar todo junto
-
-En una terminal:
+Ejemplo mínimo y funcional de consumo. Se conecta, parsea, **valida cada
+mensaje** y mide latencia y saltos de secuencia. Acepta opciones:
 
 ```bash
-python -m contrato.mock_publisher
+python3 test_client.py --host 127.0.0.1 --port 2026 --duracion 10
 ```
 
-En otra:
+| Opción | Para qué |
+|---|---|
+| `--host` | a qué máquina conectarse (ver sección 1 para el caso del robot) |
+| `--port` | el puerto; por defecto `2026` |
+| `--duracion` | segundos a escuchar y salir solo; `0` = hasta `Ctrl + C` |
+| `--silencioso` | solo el resumen final |
+
+Usalo de dos formas: como **punto de partida** para tu propio cliente, y como
+**diagnóstico** — si no sabés si el problema es tuyo o de la red, corré esto al
+lado y compará.
+
+---
+
+### Resumen para tener a mano
+
+**Terminal 1** — parado dentro de la carpeta `contrato`:
 
 ```bash
-python -m contrato.test_client
+python3 mock_publisher.py
 ```
 
-En la primera, escriban `ready` y después `start`.
+Después escribí `ready`, Enter. Luego `start`, Enter.
+
+**Terminal 2** — también parado dentro de `contrato`:
+
+```bash
+python3 test_client.py
+```
+
+**Para cerrar:** `Ctrl + C` en el cliente, `quit` en el simulador.
+
+*(En Windows, `python` en lugar de `python3`.)*
+
+> **Nota para quien ya se maneja:** también podés correrlos como módulos desde
+> la carpeta **madre** de `contrato/`, con
+> `python3 -m contrato.mock_publisher`. Las dos formas son equivalentes; la de
+> esta guía se eligió porque funciona desde la carpeta donde están los archivos
+> y evita el error `No module named 'contrato'`.
 
 ---
 
