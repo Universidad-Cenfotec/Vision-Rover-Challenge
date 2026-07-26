@@ -4,6 +4,9 @@
 # (ver CLAUDE.md, sección 6). OpenCV 4.9.0.80 se compiló contra NumPy 1.x, por
 # lo que es binariamente compatible con numpy 1.26.4 (último release de la línea
 # 1.26). No mezclar con NumPy 2.x sin verificar compatibilidad de ABI.
+#
+# Solo estas dos. La configuración se lee con el módulo `json` de la biblioteca
+# estándar, así que NO hace falta pyyaml: estuvo declarado un tiempo sin que
+# ningún archivo lo importara, y se quitó al detectarlo.
 opencv-contrib-python==4.9.0.80
 numpy==1.26.4
-pyyaml==6.0.2

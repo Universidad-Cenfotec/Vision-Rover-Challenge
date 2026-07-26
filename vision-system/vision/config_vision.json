@@ -11,7 +11,7 @@
   "marcadores_esquina": {
     "diccionario": "DICT_4X4_50",
 
-    "_REGLA_DE_MONTAJE_FISICO": "⚠️ ESTO NO ES SOLO CÓDIGO: ES LA INSTRUCCIÓN DE CÓMO PEGAR LOS MARCADORES EN LA CANCHA. Si se pegan en otro orden, TODAS las coordenadas salen rotadas o espejadas y nada de lo que publique la visión va a tener sentido. Antes de pegar, leer esto y verificarlo dos veces.",
+    "_REGLA_DE_MONTAJE_FISICO": "⚠️ ESTO NO ES SOLO CÓDIGO: ES LA INSTRUCCIÓN DE CÓMO PEGAR LOS MARCADORES EN LA CANCHA. Si se pegan en otro orden, TODAS las coordenadas salen rotadas o espejadas y nada de lo que publique la visión va a tener sentido. Antes de pegar, leer esto y verificarlo dos veces. La guía completa de montaje, con la comprobación previa a la primera ronda, está en vision-system/MONTAJE.md.",
 
     "_DISPOSICION_EN_LA_CANCHA": [
       "El ID 0 va en la ESQUINA DE SALIDA DE LOS ROBOTS. Esa esquina es el origen (0,0).",
