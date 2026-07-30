@@ -1,3 +1,4 @@
+
 | Archivo | Descripción |
 |---------|-------------|
 | `CENFOBOT_ROVER.dxf` | Diseño CAD (DXF) de la cubierta del **CENFOBOT Rover**, lista para fabricación mediante corte CNC, láser u otros procesos compatibles. |
