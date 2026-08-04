@@ -42,3 +42,14 @@ build/
 grabaciones/
 calibracion_*.npz
 calibracion_*.yaml
+
+# Capturas que guardan las herramientas de puesta a punto con la tecla [g].
+# Son de una sesión concreta y no le sirven a nadie más.
+diagnostico_*.png
+verificacion_distorsion_*.png
+# El PDF del patrón se regenera cuando haga falta; lo que se versiona es el
+# generador, no su salida.
+patron_calibracion*.pdf
+
+# Los PERFILES de cámara (vision/calibraciones/*.json) SÍ se versionan: son
+# configuración de un aparato concreto y la máquina de competencia los necesita.

@@ -106,10 +106,91 @@ class RoverDemo:
 
 
 @dataclass(frozen=True, slots=True)
+class Ajuste:
+    """Un control de cámara que queremos fijar en manual.
+
+    `prueba_a` y `prueba_b` son dos valores deliberadamente distintos que se usan
+    para verificar **por efecto**: si la imagen no cambia entre uno y otro, la
+    cámara ignoró el ajuste aunque haya dicho que lo aceptaba. Ese chequeo es el
+    único que responde de verdad si se puede fijar la exposición.
+    """
+
+    fijar: bool
+    valor: float
+    prueba_a: float
+    prueba_b: float
+
+
+@dataclass(frozen=True, slots=True)
+class UmbralesEfecto:
+    """Cuánto tiene que cambiar la imagen para dar un ajuste por confirmado."""
+
+    brillo_min: float
+    nitidez_rel_min: float
+    color_rel_min: float
+
+
+@dataclass(frozen=True, slots=True)
+class Camara:
+    """Parámetros de la webcam USB real."""
+
+    indice: int | str
+    backend: str
+    ancho: int
+    alto: int
+    fps: float
+    fourcc: str | None
+    buffersize: int
+    cuadros_calentamiento: int
+    segundos_arranque: float
+    exposicion: Ajuste
+    enfoque: Ajuste
+    balance_blancos: Ajuste
+    valor_manual_autoexposicion: float | None
+    umbrales: UmbralesEfecto
+
+
+@dataclass(frozen=True, slots=True)
+class Calibracion:
+    """Calibración intrínseca del lente: el patrón, las exigencias y los umbrales.
+
+    Es una capa PREVIA a todo lo demás: se corrige la imagen y recién después se
+    detectan marcadores y se calcula la geometría de esquinas.
+    """
+
+    columnas_internas: int
+    filas_internas: int
+    lado_mm: float
+    papel: str
+    vistas_minimas: int
+    vistas_objetivo: int
+    modelo: str
+    alpha: float
+    perfil: str
+    excelente_px: float
+    bueno_px: float
+    aceptable_px: float
+    estabilidad_px: float
+    inclinacion_min: float
+    pausa_s: float
+
+    @property
+    def tamano_patron(self) -> tuple[int, int]:
+        """Como lo espera OpenCV: (columnas, filas) de esquinas internas."""
+        return (self.columnas_internas, self.filas_internas)
+
+    def ruta_perfil(self, base: str) -> str:
+        """Ruta absoluta del perfil, resuelta contra la carpeta `vision/`."""
+        return self.perfil if os.path.isabs(self.perfil) else os.path.join(base, self.perfil)
+
+
+@dataclass(frozen=True, slots=True)
 class ConfigVision:
     tablero: Tablero
     marcadores_esquina: MarcadoresEsquina
     sintetico: Sintetico
+    camara: Camara
+    calibracion: Calibracion
     rovers_demo: tuple[RoverDemo, ...]
 
 
@@ -140,6 +221,62 @@ def _leer_disposicion(bruto: dict[str, Any], cols: int, rows: int) -> dict[int, 
             )
         salida[int(id_texto)] = _ESQUINAS[nombre](cols, rows)
     return salida
+
+
+def _leer_ajuste(d: dict[str, Any]) -> Ajuste:
+    return Ajuste(
+        fijar=bool(d["fijar"]),
+        valor=float(d["valor"]),
+        prueba_a=float(d["prueba_a"]),
+        prueba_b=float(d["prueba_b"]),
+    )
+
+
+def _leer_camara(d: dict[str, Any]) -> Camara:
+    a = d["ajustes"]
+    u = d["umbrales_efecto"]
+    return Camara(
+        indice=(d["indice"] if isinstance(d["indice"], str) else int(d["indice"])),
+        backend=str(d["backend"]).lower(),
+        ancho=int(d["ancho"]),
+        alto=int(d["alto"]),
+        fps=float(d["fps"]),
+        fourcc=d["fourcc"],
+        buffersize=int(d["buffersize"]),
+        cuadros_calentamiento=int(d["cuadros_calentamiento"]),
+        segundos_arranque=float(d.get("segundos_arranque", 6.0)),
+        exposicion=_leer_ajuste(a["exposicion"]),
+        enfoque=_leer_ajuste(a["enfoque"]),
+        balance_blancos=_leer_ajuste(a["balance_blancos"]),
+        valor_manual_autoexposicion=a.get("valor_manual_autoexposicion"),
+        umbrales=UmbralesEfecto(
+            brillo_min=float(u["brillo_min"]),
+            nitidez_rel_min=float(u["nitidez_rel_min"]),
+            color_rel_min=float(u["color_rel_min"]),
+        ),
+    )
+
+
+def _leer_calibracion(d: dict[str, Any]) -> Calibracion:
+    p = d["patron"]
+    u = d["umbrales"]
+    return Calibracion(
+        columnas_internas=int(p["columnas_internas"]),
+        filas_internas=int(p["filas_internas"]),
+        lado_mm=float(p["lado_mm"]),
+        papel=str(d["papel"]).lower(),
+        vistas_minimas=int(d["vistas_minimas"]),
+        vistas_objetivo=int(d["vistas_objetivo"]),
+        modelo=str(d["modelo"]).lower(),
+        alpha=float(d["alpha"]),
+        perfil=str(d["perfil"]),
+        excelente_px=float(u["excelente_px"]),
+        bueno_px=float(u["bueno_px"]),
+        aceptable_px=float(u["aceptable_px"]),
+        estabilidad_px=float(u["estabilidad_px"]),
+        inclinacion_min=float(u["inclinacion_min"]),
+        pausa_s=float(u["pausa_s"]),
+    )
 
 
 def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
@@ -174,13 +311,21 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         perspectiva=Perspectiva(activa=bool(p["activa"]), inclinacion=float(p["inclinacion"])),
     )
 
+    camara = _leer_camara(d["camara"])
+    calibracion = _leer_calibracion(d["calibracion"])
+
     rovers = tuple(
         RoverDemo(id=int(r["id"]), col=float(r["col"]), row=float(r["row"]), theta=float(r["theta"]))
         for r in d.get("rovers_demo", ())
     )
 
     cfg = ConfigVision(
-        tablero=tablero, marcadores_esquina=marcadores, sintetico=sintetico, rovers_demo=rovers
+        tablero=tablero,
+        marcadores_esquina=marcadores,
+        sintetico=sintetico,
+        camara=camara,
+        calibracion=calibracion,
+        rovers_demo=rovers,
     )
     error = revisar_config(cfg)
     if error is not None:
@@ -218,4 +363,44 @@ def revisar_config(cfg: ConfigVision) -> str | None:
         return "borde_blanco_celdas debe ser > 0: sin zona blanca el detector no ve los marcadores"
     if not (0.0 <= s.perspectiva.inclinacion < 0.5):
         return "perspectiva.inclinacion debe estar en [0, 0.5)"
+    c = cfg.camara
+    if isinstance(c.indice, str):
+        if c.indice.lower() not in ("menu", "auto"):
+            return (
+                "camara.indice debe ser un número, \"menu\" (preguntar cuál usar) "
+                "o \"auto\" (tomar la primera que responda), no {!r}".format(c.indice)
+            )
+    elif c.indice < 0:
+        return "camara.indice no puede ser negativo"
+    if c.backend not in ("auto", "avfoundation", "dshow", "msmf", "v4l2", "any"):
+        return "camara.backend desconocido: {!r}".format(c.backend)
+    if c.ancho <= 0 or c.alto <= 0:
+        return "camara.ancho y camara.alto deben ser > 0"
+    if c.fourcc is not None and len(str(c.fourcc)) != 4:
+        return "camara.fourcc debe tener exactamente 4 letras (por ejemplo 'MJPG') o ser null"
+    for nombre, aj in (("exposicion", c.exposicion), ("enfoque", c.enfoque),
+                       ("balance_blancos", c.balance_blancos)):
+        if aj.prueba_a == aj.prueba_b:
+            return (
+                "camara.ajustes.{}: prueba_a y prueba_b son iguales, así no se puede "
+                "verificar por efecto (hacen falta dos valores distintos)".format(nombre)
+            )
+    k = cfg.calibracion
+    if k.columnas_internas == k.filas_internas:
+        return (
+            "calibracion.patron: columnas_internas y filas_internas deben ser DISTINTAS; "
+            "con un patrón cuadrado el detector no puede determinar la orientación"
+        )
+    if min(k.columnas_internas, k.filas_internas) < 3:
+        return "calibracion.patron: hacen falta al menos 3 esquinas internas por lado"
+    if k.lado_mm <= 0:
+        return "calibracion.patron.lado_mm debe ser > 0 (es el tamaño real medido con regla)"
+    if k.modelo not in ("estandar", "racional"):
+        return "calibracion.modelo debe ser 'estandar' o 'racional', no {!r}".format(k.modelo)
+    if not (0.0 <= k.alpha <= 1.0):
+        return "calibracion.alpha debe estar entre 0 y 1"
+    if k.vistas_minimas < 6:
+        return "calibracion.vistas_minimas: con menos de 6 vistas la calibración no es confiable"
+    if k.papel not in ("carta", "a4", "oficio"):
+        return "calibracion.papel desconocido: {!r}".format(k.papel)
     return None

@@ -25,6 +25,8 @@ contrato. Como `row` crece hacia abajo, el vector de avance en píxeles es
 from __future__ import annotations
 
 import math
+import time
+from collections import deque
 from dataclasses import dataclass
 
 import cv2
@@ -32,6 +34,7 @@ import numpy as np
 
 try:  # como paquete: python -m vision.sources.generador_sintetico
     from ..configuracion import ConfigVision, Perspectiva, RoverDemo, diccionario_aruco
+    from .fuente import Cuadro, ahora_ms
 except ImportError:  # como script suelto
     from vision.configuracion import (  # type: ignore[no-redef]
         ConfigVision,
@@ -39,6 +42,7 @@ except ImportError:  # como script suelto
         RoverDemo,
         diccionario_aruco,
     )
+    from vision.sources.fuente import Cuadro, ahora_ms  # type: ignore[no-redef]
 
 
 # --------------------------------------------------------------------------
@@ -338,6 +342,63 @@ def _homografia_perspectiva(ancho: int, alto: int, inclinacion: float) -> np.nda
     origen = np.array([[0, 0], [ancho, 0], [ancho, alto], [0, alto]], dtype=np.float32)
     destino = np.array([[d, 0], [ancho - d, 0], [ancho, alto], [0, alto]], dtype=np.float32)
     return cv2.getPerspectiveTransform(origen, destino).astype(np.float64)
+
+
+# --------------------------------------------------------------------------
+# Fuente de imágenes — la misma interfaz que la cámara real
+# --------------------------------------------------------------------------
+
+
+class FuenteSintetica:
+    """Entrega imágenes sintéticas cumpliendo la interfaz de `fuente.py`.
+
+    Sirve para correr contra el sistema completo **sin cámara**: cualquier pieza
+    que reciba una `FuenteImagen` funciona igual con esta o con `FuenteCamara`.
+    Y como sigue exponiendo la `verdad` de lo que dibujó, permite verificar lo
+    que el sistema deduce, cosa que la cámara real no puede hacer.
+
+    La imagen se genera **una sola vez** al construir y se reutiliza: para
+    diagnóstico alcanza, y evita rehacer el mismo dibujo decenas de veces por
+    segundo. Lo que cambia en cada lectura es la marca de tiempo, que es lo que
+    el consumidor usa para medir edad.
+    """
+
+    def __init__(
+        self,
+        cfg: ConfigVision,
+        rovers: tuple[RoverDemo, ...] | None = None,
+        perspectiva: Perspectiva | None = None,
+    ):
+        self.imagen, self.verdad = generar(cfg, rovers=rovers, perspectiva=perspectiva)
+        self._indice = 0
+        self._marcas: deque[float] = deque(maxlen=90)
+
+    def leer(self) -> Cuadro:
+        self._indice += 1
+        self._marcas.append(time.monotonic())
+        return Cuadro(imagen=self.imagen, ts_ms=ahora_ms(), indice=self._indice)
+
+    @property
+    def fps_real(self) -> float:
+        """Cuadros por segundo que está entregando de hecho.
+
+        La fuente sintética no tiene una tasa propia: entrega tan rápido como se
+        lo pidan. Se mide igual para que el diagnóstico muestre lo mismo en las
+        dos fuentes en vez de un hueco.
+        """
+        if len(self._marcas) < 2:
+            return 0.0
+        lapso = self._marcas[-1] - self._marcas[0]
+        return (len(self._marcas) - 1) / lapso if lapso > 0 else 0.0
+
+    def cerrar(self) -> None:
+        """No hay nada que liberar; existe para cumplir la interfaz."""
+
+    def __enter__(self) -> "FuenteSintetica":
+        return self
+
+    def __exit__(self, *_) -> None:
+        self.cerrar()
 
 
 def _dibujar_grilla(lienzo, tablero, sintetico, ideal) -> None:

@@ -65,13 +65,13 @@ haber; cada carpeta tiene su propio README con el detalle:
 
 | Paquete | Lado | Rol | Estado |
 |---|---|---|---|
-| `sources/` | Productor | De dónde salen las imágenes | 🟢 **generador sintético** con verdad conocida · ⚪ captura de webcam |
-| `geometry/` | Productor | Píxeles → celdas | 🟢 **coordenadas ArUco** verificadas · ⚪ distorsión y paralaje |
+| `sources/` | Productor | De dónde salen las imágenes | 🟢 **cámara USB real** y **generador sintético**, intercambiables |
+| `geometry/` | Productor | Píxeles → celdas | 🟢 **coordenadas ArUco** y **corrección de distorsión** · ⚪ paralaje |
 | `detectors/` | Productor | Qué hay y dónde | ⚪ vacío |
 | `tracking/` | Productor | Identidad, oclusión y edad | ⚪ vacío |
 | `publish/` | Consumidor | Publicación TCP/NDJSON | ⚪ vacío (el comportamiento ya está probado en el simulador del contrato) |
 | `record/` | Consumidor | Grabación a disco | ⚪ vacío |
-| `tools/` | Herramientas | Puesta a punto | 🟢 **verificación de geometría** · ⚪ calibración y monitor |
+| `tools/` | Herramientas | Puesta a punto | 🟢 **verificación de geometría**, **diagnóstico de cámara** y **calibración de distorsión** · ⚪ alineamiento y monitor |
 
 🟢 hay código funcionando · ⚪ planificado, sin código aún
 
@@ -87,10 +87,19 @@ Desde `vision-system/`, con el entorno virtual ya creado (ver el
 
 # Lo mismo, guardando la imagen generada con lo detectado dibujado encima.
 .venv/bin/python -m vision.tools.verificar_geometria --salida /tmp/tablero.png --anotar
+
+# Diagnóstico de la cámara real: fps, ajustes y marcadores de esquina en vivo.
+.venv/bin/python -m vision.tools.diagnostico_camara
+.venv/bin/python -m vision.tools.diagnostico_camara --listar     # ¿qué cámaras hay?
+
+# Calibración de la distorsión del lente.
+.venv/bin/python -m vision.tools.patron_calibracion --salida patron.pdf   # imprimir esto
+.venv/bin/python -m vision.tools.calibrar_camara                          # capturar y calibrar
+.venv/bin/python -m vision.tools.calibrar_camara --verificar              # antes y después
 ```
 
-Todavía no hay nada que capture de una cámara real ni que publique telemetría:
-para eso, hoy se usa el simulador de [`../contrato/`](../contrato/README.md).
+Todavía no hay nada que publique telemetría: para eso, hoy se usa el simulador de
+[`../contrato/`](../contrato/README.md).
 
 ## Dependencias
 

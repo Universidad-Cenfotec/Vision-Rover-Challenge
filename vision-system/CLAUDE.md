@@ -178,9 +178,14 @@ Vision-Rover-Challenge/          # raíz del repositorio (fork)
   - `contrato/` se entrega **suelto, sin instalador**: cada equipo lo corre con el
     Python que ya tiene, y el de fábrica de macOS es 3.9. Piso bajo a propósito
     para no excluir a nadie.
-- **Dependencias de visión:** `opencv-contrib-python` y `numpy`, con versiones
-  fijadas. **Nada más sin pedirlo.** El `contrato/` no tiene ninguna: corre con
-  biblioteca estándar pura.
+- **Dependencias de visión:** `opencv-contrib-python`, `numpy` y `pillow`, con
+  versiones fijadas. **Nada más sin pedirlo.**
+  `pillow` es **solo para las herramientas visuales**: dibuja el texto en español
+  sobre el video, porque `cv2.putText` es ASCII puro y escribe mal los acentos.
+  Está tratada como **opcional en el código**: si falta, el panel se dibuja sin
+  acentos en vez de romperse.
+  El **`contrato/` no tiene ninguna dependencia**: corre con biblioteca estándar
+  pura, y eso no cambia.
 - El **cliente de referencia del robot** se escribe en **CircuitPython** (ESP32/IdeaBoard),
   **no en Arduino**.
 - **Configuración como datos:** todo umbral, ID, rango de color, tamaño de grilla y tasa

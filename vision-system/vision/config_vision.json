@@ -72,6 +72,120 @@
     }
   },
 
+  "camara": {
+    "_acerca_de": "Webcam USB real. Cámara de referencia: ArgomTech CAM40, 1080p, lente gran angular, enfoque manual.",
+
+    "indice": "menu",
+    "_nota_indice": "Qué cámara usar. Tres valores posibles: (1) \"menu\" —el recomendado— muestra las cámaras detectadas numeradas, con su nombre y resolución, y pregunta cuál usar; si hay una sola, la toma sin preguntar. (2) Un número, para no elegir cada vez, una vez que se sabe cuál es. (3) \"auto\", que toma la primera que responda sin preguntar: sirve para correr sin nadie delante, pero OJO, con dos cámaras conectadas puede agarrar la equivocada.",
+    "_nota_por_que_menu": "El índice de una webcam USB NO es estable: depende de qué se enchufó primero, de si hay cámara integrada y de si la máquina se reinició. Y elegir mal no da ningún error: da una calibración hecha con la cámara equivocada. Por eso conviene que elija una persona mirando la lista, en vez de que el programa adivine.",
+
+    "backend": "auto",
+    "_nota_backend": "auto elige según el sistema operativo: AVFoundation en macOS, DSHOW en Windows, V4L2 en Linux. Se elige DSHOW y no MSMF en Windows porque expone mejor los controles de exposición y enfoque, que es lo que nos importa. Valores posibles: auto, avfoundation, dshow, msmf, v4l2, any.",
+
+    "ancho": 1920,
+    "alto": 1080,
+    "fps": 30,
+    "fourcc": "MJPG",
+    "_nota_fourcc": "Muchas webcams entregan 1080p a 5 fps en YUY2 (sin comprimir) y a 30 fps en MJPG. Pedir MJPG suele ser la diferencia entre servible e inservible. Poner null para no pedir ninguno. Lo que la cámara realmente negocie se reporta en el diagnóstico: casi nunca es exactamente lo pedido.",
+
+    "buffersize": 1,
+    "_nota_buffersize": "Un solo cuadro en el buffer del driver. Si se acumulan, se procesa telemetría vieja creyendo que es actual. Muchos backends lo ignoran; para eso está además el hilo lector que descarta.",
+
+    "cuadros_calentamiento": 10,
+    "_nota_calentamiento": "Cuadros a descartar al abrir. Las cámaras arrancan en automático y tardan en estabilizarse; medir o fijar ajustes antes de eso da lecturas engañosas.",
+
+    "segundos_arranque": 6.0,
+    "_nota_arranque": "Cuánto esperar a que la cámara entregue su PRIMER cuadro. Hay que esperar por tiempo y no por cantidad de intentos: una webcam USB en macOS puede tardar más de un segundo en arrancar después de que se le pide una resolución, y un puñado de lecturas inmediatas fallan todas antes de que el dispositivo haya arrancado. Si en ese plazo no llega nada con el formato pedido, la cámara se reabre SIN pedirle formato y se reintenta, porque muchas webcams rechazan una combinación de resolución y códec que no soportan y dejan de entregar imágenes sin dar ningún error.",
+
+    "ajustes": {
+      "_acerca_de": "Exposición, enfoque y balance de blancos SIEMPRE fijos, nunca en automático (CLAUDE.md, sección 5). Un ajuste que se mueve solo cambia los colores a mitad de ronda y rompe la detección. El caso más peligroso es el robot negro: con exposición automática, la cámara sube la ganancia para 'compensar' el negro y quema los marcadores blancos.",
+
+      "exposicion": {
+        "fijar": true,
+        "valor": -6,
+        "prueba_a": -9,
+        "prueba_b": -3,
+        "_nota_unidades": "OJO: las unidades dependen del backend. En DSHOW el valor suele ser log2 de segundos (-6 = 1/64 s); en V4L2 son unidades de 100 microsegundos. No hay un valor universal: hay que ajustarlo mirando la imagen en la cámara y el sistema reales.",
+        "_nota_prueba": "prueba_a y prueba_b son dos valores MUY distintos que se usan para verificar por efecto: si el brillo medio de la imagen no cambia entre los dos, la cámara ignoró el ajuste aunque diga que lo aceptó."
+      },
+
+      "enfoque": {
+        "fijar": true,
+        "valor": 0,
+        "prueba_a": 0,
+        "prueba_b": 255,
+        "_nota": "Con enfoque manual fijo. El rango típico va de 0 (infinito) a 255 (cerca), pero varía por cámara. La verificación por efecto compara la nitidez entre los dos valores de prueba."
+      },
+
+      "balance_blancos": {
+        "fijar": true,
+        "valor": 4500,
+        "prueba_a": 2800,
+        "prueba_b": 6500,
+        "_nota": "Temperatura de color en kelvin. La verificación por efecto compara la relación azul/rojo de la imagen entre los dos valores."
+      },
+
+      "valor_manual_autoexposicion": null,
+      "_nota_autoexposicion": "El número que hay que escribir en CAP_PROP_AUTO_EXPOSURE para pasar a MANUAL cambia según el backend: 0.25 en DSHOW, 1 en V4L2. Con null se elige el que corresponde al backend en uso. Solo hay que tocarlo si una cámara concreta usa otra convención."
+    },
+
+    "umbrales_efecto": {
+      "brillo_min": 3.0,
+      "nitidez_rel_min": 0.15,
+      "color_rel_min": 0.05,
+      "_nota": "Cuánto tiene que cambiar la imagen entre los dos valores de prueba para dar por confirmado que el ajuste tuvo efecto real. brillo_min en niveles de gris (0-255); los otros dos son diferencias relativas."
+    },
+
+    "_nota_macos": "ADVERTENCIA: en macOS, OpenCV sobre AVFoundation casi no expone controles de cámara, así que es esperable que exposición y enfoque salgan como 'no soportado'. Eso NO significa que la cámara no sirva: significa que macOS no deja tocarlos por esta vía. La prueba que cuenta se hace en Windows con DSHOW, que es el destino de despliegue."
+  },
+
+  "calibracion": {
+    "_acerca_de": "Calibración INTRÍNSECA del lente: mide cuánto curva las líneas rectas el gran angular, para poder corregirlo. Se hace con un patrón de ajedrez movido en el aire, que NO es el tablero de juego. Es una capa previa: se corrige la imagen y recién después se detectan marcadores y se calcula la geometría de esquinas.",
+
+    "patron": {
+      "columnas_internas": 13,
+      "filas_internas": 6,
+      "lado_mm": 25.0,
+
+      "_nota_lado": "EL DATO MÁS IMPORTANTE. Tiene que ser el tamaño REAL del cuadro impreso, medido con regla. Si la hoja se imprimió escalada, la calibración queda mal en silencio: el error de reproyección puede salir bajo igual porque el patrón es coherente consigo mismo, pero las medidas del mundo real salen corridas.",
+
+      "_nota_dimensiones": "columnas y filas deben ser DISTINTAS: con un patrón cuadrado el detector no puede determinar la orientación y las esquinas salen ordenadas de forma inconsistente entre vistas.",
+
+      "_ELEGIDO": "13x6 con cuadros de 25 mm = 350 x 175 mm, en DOS hojas Carta horizontal con UN solo empalme. Elegido para una cámara a 130 cm: un patrón ancho cubre mejor los bordes del cuadro, que es donde más distorsiona el lente. Se prefirió sobre 13x9 (350 x 250 mm) porque aquel necesita CUATRO hojas y TRES empalmes, y cada empalme es una oportunidad de que el patrón deje de ser plano.",
+
+      "_ALTERNATIVA_UNA_HOJA": "Si no se logra dejar las dos hojas perfectamente planas, usar 9x6 (250 x 175 mm), que entra en UNA sola hoja sin empalmes. Un patrón chico y perfectamente plano calibra MEJOR que uno grande y ondulado: la calibración supone que el patrón es un plano perfecto y cada ondulación la interpreta como distorsión del lente. Para cambiarlo: poner columnas_internas en 9 y regenerar el PDF.",
+
+      "_nota_como_usarlo": "El tamaño del patrón NO obliga a calibrar desde lejos: durante la calibración conviene acercarlo a la cámara para que llene el cuadro, y alejarlo en otras vistas. Con el patrón 13x6, que es alargado, conviene además rotarlo 90 grados en algunas capturas para cubrir también el eje vertical del cuadro."
+    },
+
+    "papel": "carta",
+
+    "vistas_minimas": 12,
+    "vistas_objetivo": 15,
+    "_nota_vistas": "Lo que importa no es la cantidad sino la VARIEDAD: 15 vistas todas de frente y en el centro calibran peor que 10 bien repartidas. La herramienta exige además cubrir las 9 zonas del cuadro, los 3 tramos de distancia y 4 vistas inclinadas.",
+
+    "modelo": "estandar",
+    "_nota_modelo": "estandar = 5 coeficientes (k1,k2,p1,p2,k3), alcanza para la mayoría de los lentes. racional = 8 coeficientes, para gran angulares que distorsionan más de lo que el estándar puede describir. Si el error de reproyección queda alto con estandar, probar racional.",
+
+    "alpha": 0.0,
+    "_nota_alpha": "Cuánto campo visual se conserva al corregir. 0 = recorta a los píxeles válidos, sin bordes negros pero perdiendo algo de borde. 1 = conserva todo el campo, con bordes negros curvados que pueden confundir a los detectores. Si con 0 se pierde de vista algún marcador de esquina, subirlo.",
+
+    "perfil": "calibraciones/argomtech_cam40.json",
+    "_nota_perfil": "Dónde se guarda y de dónde se lee el resultado, relativo a vision/. Es el PERFIL DE CÁMARA del CLAUDE.md sección 5: los parámetros específicos de cada cámara van en configuración y no en el código, para poder tener más de una cámara sin bifurcar.",
+
+    "umbrales": {
+      "excelente_px": 0.3,
+      "bueno_px": 0.5,
+      "aceptable_px": 1.0,
+      "_nota_error": "Error de reproyección en píxeles. Por debajo de bueno_px la calibración sirve; por encima de aceptable_px hay que repetirla.",
+
+      "estabilidad_px": 2.0,
+      "inclinacion_min": 0.15,
+      "pausa_s": 0.8,
+      "_nota_captura": "estabilidad_px: cuánto se pueden mover las esquinas entre cuadros para considerar que el patrón está quieto (una foto movida arruina el promedio). inclinacion_min: cuánta deformación del contorno cuenta como vista inclinada. pausa_s: espera entre capturas automáticas."
+    }
+  },
+
   "rovers_demo": [
     { "id": 10, "col": 12.5, "row": 9.0, "theta": 30.0 },
     { "id": 11, "col": 36.0, "row": 33.5, "theta": 205.0 }

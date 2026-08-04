@@ -5,8 +5,20 @@
 # lo que es binariamente compatible con numpy 1.26.4 (último release de la línea
 # 1.26). No mezclar con NumPy 2.x sin verificar compatibilidad de ABI.
 #
-# Solo estas dos. La configuración se lee con el módulo `json` de la biblioteca
-# estándar, así que NO hace falta pyyaml: estuvo declarado un tiempo sin que
-# ningún archivo lo importara, y se quitó al detectarlo.
+# La configuración se lee con el módulo `json` de la biblioteca estándar, así
+# que NO hace falta pyyaml: estuvo declarado un tiempo sin que ningún archivo lo
+# importara, y se quitó al detectarlo.
 opencv-contrib-python==4.9.0.80
 numpy==1.26.4
+
+# Pillow: SOLO para dibujar texto en español sobre el video de las herramientas
+# visuales. `cv2.putText` usa fuentes Hershey, que son ASCII puro y escriben mal
+# los acentos y las eñes sin avisar; y `cv2.freetype`, que sería el camino
+# nativo, no viene compilado en la rueda de opencv-contrib-python.
+#
+# Es OPCIONAL en el código: si falta, el panel cae a cv2.putText transliterando
+# los acentos. Se ve peor pero la herramienta no se rompe.
+#
+# Solo del lado de visión. El paquete `contrato/`, que es lo que se entrega a
+# los equipos, sigue SIN NINGUNA dependencia.
+pillow==12.3.0
