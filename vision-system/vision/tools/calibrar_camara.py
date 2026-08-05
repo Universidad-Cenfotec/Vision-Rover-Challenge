@@ -385,104 +385,105 @@ def modo_calibrar(cfg, args) -> int:
     except ErrorCamara as exc:
         print("ERROR: {}".format(exc), file=sys.stderr)
         return 2
-    if fuente.aviso:
-        print("⚠ {}\n".format(fuente.aviso))
+    with fuente:
+        if fuente.aviso:
+            print("⚠ {}\n".format(fuente.aviso))
 
-    cobertura = Cobertura(cal)
-    vistas: list[np.ndarray] = []
-    anteriores: np.ndarray | None = None
-    ultima_captura = 0.0
-    resolucion = None
-    ventana = "Calibracion — mové el patron por todo el cuadro"
+        cobertura = Cobertura(cal)
+        vistas: list[np.ndarray] = []
+        anteriores: np.ndarray | None = None
+        ultima_captura = 0.0
+        resolucion = None
+        ventana = "Calibracion — mové el patron por todo el cuadro"
 
-    try:
-        while True:
-            cuadro = fuente.leer()
-            if cuadro is None:
-                time.sleep(0.01)
-                continue
-            imagen = cuadro.imagen
-            alto, ancho = imagen.shape[:2]
-            resolucion = (ancho, alto)
-            lienzo = imagen.copy() if imagen.ndim == 3 else cv2.cvtColor(imagen, cv2.COLOR_GRAY2BGR)
-
-            esquinas = detectar_patron(imagen, tamano)
-            estable = False
-            if esquinas is not None:
-                cv2.drawChessboardCorners(lienzo, tamano, esquinas, True)
-                if anteriores is not None and anteriores.shape == esquinas.shape:
-                    movimiento = float(np.linalg.norm(
-                        esquinas.reshape(-1, 2) - anteriores.reshape(-1, 2), axis=1).mean())
-                    estable = movimiento < cal.estabilidad_px
-                anteriores = esquinas
-
-                zona = zona_de(esquinas, ancho, alto)
-                distancia = tramo_distancia(esquinas, ancho, alto)
-                incl = inclinacion_de(esquinas, tamano)
-
-                # Captura automática: detectado + quieto + aporta algo nuevo.
-                # Guardar fotos movidas es la forma más común de arruinar el
-                # promedio sin darse cuenta.
-                if (estable and not args.manual
-                        and time.monotonic() - ultima_captura > cal.pausa_s
-                        and cobertura.aporta(zona, distancia, incl)):
-                    vistas.append(esquinas)
-                    cobertura.registrar(zona, distancia, incl)
-                    ultima_captura = time.monotonic()
-                    print("  captura {:>2}  zona {} · {} · inclinación {:.2f}".format(
-                        len(vistas), zona, distancia, incl))
-            else:
-                anteriores = None
-
-            mapa = cobertura.mapa()
-            lineas = [
-                ("PATRON: {}".format("DETECTADO" if esquinas is not None else "no se ve"),
-                 VERDE if esquinas is not None else ROJO),
-                ("quieto: {}".format("si" if estable else "no  (mantenelo firme)"),
-                 VERDE if estable else AMARILLO),
-                ("", _BLANCO_BGR),
-                ("CAPTURAS: {} de {}".format(cobertura.total, cal.vistas_objetivo),
-                 VERDE if cobertura.suficiente else BLANCO),
-                ("zonas {}   distancias {}/3   inclinadas {}/4".format(
-                    mapa[0], len(cobertura.distancias), cobertura.inclinadas), BLANCO),
-                ("      {}".format(mapa[1]), _BLANCO_BGR),
-                ("      {}".format(mapa[2]), BLANCO),
-                ("", _BLANCO_BGR),
-                ("> {}".format(cobertura.que_falta()),
-                 VERDE if cobertura.suficiente else AMARILLO),
-                ("", _BLANCO_BGR),
-                ("[C] calibrar   [espacio] capturar   [D] borrar ultima   [Q] salir", _GRIS_BGR),
-            ]
-            _panel(lienzo, lineas)
-
-            try:
-                cv2.imshow(ventana, lienzo)
-            except cv2.error as exc:
-                print("No se pudo abrir la ventana: {}".format(exc), file=sys.stderr)
-                return 2
-            tecla = cv2.waitKey(1) & 0xFF
-            if tecla in (ord("q"), 27):
-                print("\nCancelado sin calibrar.")
-                return 1
-            if tecla == ord(" ") and esquinas is not None:
-                vistas.append(esquinas)
-                cobertura.registrar(zona_de(esquinas, ancho, alto),
-                                    tramo_distancia(esquinas, ancho, alto),
-                                    inclinacion_de(esquinas, tamano))
-                ultima_captura = time.monotonic()
-                print("  captura manual {}".format(len(vistas)))
-            if tecla == ord("d") and vistas:
-                vistas.pop()
-                cobertura.total -= 1
-                print("  borrada la última (quedan {})".format(len(vistas)))
-            if tecla == ord("c"):
-                if len(vistas) < cal.vistas_minimas:
-                    print("  hacen falta al menos {} vistas (hay {})".format(
-                        cal.vistas_minimas, len(vistas)))
+        try:
+            while True:
+                cuadro = fuente.leer()
+                if cuadro is None:
+                    time.sleep(0.01)
                     continue
-                break
-    finally:
-        cv2.destroyAllWindows()
+                imagen = cuadro.imagen
+                alto, ancho = imagen.shape[:2]
+                resolucion = (ancho, alto)
+                lienzo = imagen.copy() if imagen.ndim == 3 else cv2.cvtColor(imagen, cv2.COLOR_GRAY2BGR)
+
+                esquinas = detectar_patron(imagen, tamano)
+                estable = False
+                if esquinas is not None:
+                    cv2.drawChessboardCorners(lienzo, tamano, esquinas, True)
+                    if anteriores is not None and anteriores.shape == esquinas.shape:
+                        movimiento = float(np.linalg.norm(
+                            esquinas.reshape(-1, 2) - anteriores.reshape(-1, 2), axis=1).mean())
+                        estable = movimiento < cal.estabilidad_px
+                    anteriores = esquinas
+
+                    zona = zona_de(esquinas, ancho, alto)
+                    distancia = tramo_distancia(esquinas, ancho, alto)
+                    incl = inclinacion_de(esquinas, tamano)
+
+                    # Captura automática: detectado + quieto + aporta algo nuevo.
+                    # Guardar fotos movidas es la forma más común de arruinar el
+                    # promedio sin darse cuenta.
+                    if (estable and not args.manual
+                            and time.monotonic() - ultima_captura > cal.pausa_s
+                            and cobertura.aporta(zona, distancia, incl)):
+                        vistas.append(esquinas)
+                        cobertura.registrar(zona, distancia, incl)
+                        ultima_captura = time.monotonic()
+                        print("  captura {:>2}  zona {} · {} · inclinación {:.2f}".format(
+                            len(vistas), zona, distancia, incl))
+                else:
+                    anteriores = None
+
+                mapa = cobertura.mapa()
+                lineas = [
+                    ("PATRON: {}".format("DETECTADO" if esquinas is not None else "no se ve"),
+                     VERDE if esquinas is not None else ROJO),
+                    ("quieto: {}".format("si" if estable else "no  (mantenelo firme)"),
+                     VERDE if estable else AMARILLO),
+                    ("", _BLANCO_BGR),
+                    ("CAPTURAS: {} de {}".format(cobertura.total, cal.vistas_objetivo),
+                     VERDE if cobertura.suficiente else BLANCO),
+                    ("zonas {}   distancias {}/3   inclinadas {}/4".format(
+                        mapa[0], len(cobertura.distancias), cobertura.inclinadas), BLANCO),
+                    ("      {}".format(mapa[1]), _BLANCO_BGR),
+                    ("      {}".format(mapa[2]), BLANCO),
+                    ("", _BLANCO_BGR),
+                    ("> {}".format(cobertura.que_falta()),
+                     VERDE if cobertura.suficiente else AMARILLO),
+                    ("", _BLANCO_BGR),
+                    ("[C] calibrar   [espacio] capturar   [D] borrar ultima   [Q] salir", _GRIS_BGR),
+                ]
+                _panel(lienzo, lineas)
+
+                try:
+                    cv2.imshow(ventana, lienzo)
+                except cv2.error as exc:
+                    print("No se pudo abrir la ventana: {}".format(exc), file=sys.stderr)
+                    return 2
+                tecla = cv2.waitKey(1) & 0xFF
+                if tecla in (ord("q"), 27):
+                    print("\nCancelado sin calibrar.")
+                    return 1
+                if tecla == ord(" ") and esquinas is not None:
+                    vistas.append(esquinas)
+                    cobertura.registrar(zona_de(esquinas, ancho, alto),
+                                        tramo_distancia(esquinas, ancho, alto),
+                                        inclinacion_de(esquinas, tamano))
+                    ultima_captura = time.monotonic()
+                    print("  captura manual {}".format(len(vistas)))
+                if tecla == ord("d") and vistas:
+                    vistas.pop()
+                    cobertura.total -= 1
+                    print("  borrada la última (quedan {})".format(len(vistas)))
+                if tecla == ord("c"):
+                    if len(vistas) < cal.vistas_minimas:
+                        print("  hacen falta al menos {} vistas (hay {})".format(
+                            cal.vistas_minimas, len(vistas)))
+                        continue
+                    break
+        finally:
+            cv2.destroyAllWindows()
 
     # --- cálculo ----------------------------------------------------------
     print("\nCalculando con {} vistas...".format(len(vistas)))
@@ -538,13 +539,11 @@ def modo_calibrar(cfg, args) -> int:
     if rms >= cal.aceptable_px and not args.guardar_igual:
         print("\n  NO se guardó el perfil porque la calibración no es confiable.")
         print("  Repetila, o usá --guardar-igual si querés conservarla de todos modos.")
-        fuente.cerrar()
         return 1
 
     if not confirmar_sobrescritura(ruta_perfil):
         print("\n  No se guardó nada: el perfil existente quedó intacto.")
         print("  Volvé a calibrar con otro nombre: --camara \"OTRO NOMBRE\"")
-        fuente.cerrar()
         return 1
 
     guardar_perfil(perfil, ruta_perfil)
@@ -553,7 +552,6 @@ def modo_calibrar(cfg, args) -> int:
     print("\n  Verificalo con tus ojos:")
     print("    python -m vision.tools.calibrar_camara --verificar --camara \"{}\"".format(
         nombre_camara))
-    fuente.cerrar()
     return 0
 
 
@@ -573,150 +571,148 @@ def modo_verificar(cfg, args) -> int:
         print("ERROR: {}".format(exc), file=sys.stderr)
         return 2
 
-    primero = None
-    limite = time.monotonic() + 10.0
-    while primero is None and time.monotonic() < limite:
-        primero = fuente.leer()
-        time.sleep(0.01)
-    if primero is None:
-        print("ERROR: la cámara no entregó ninguna imagen.", file=sys.stderr)
-        fuente.cerrar()
-        return 2
-    alto_cam, ancho_cam = primero.imagen.shape[:2]
+    with fuente:
+        primero = None
+        limite = time.monotonic() + 10.0
+        while primero is None and time.monotonic() < limite:
+            primero = fuente.leer()
+            time.sleep(0.01)
+        if primero is None:
+            print("ERROR: la cámara no entregó ninguna imagen.", file=sys.stderr)
+            return 2
+        alto_cam, ancho_cam = primero.imagen.shape[:2]
 
-    interactivo = bool(sys.stdin and sys.stdin.isatty())
-    try:
-        perfil = elegir_perfil(cal, BASE_VISION, ancho_cam, alto_cam,
-                               nombre=args.camara, interactivo=interactivo)
-    except ErrorCalibracion as exc:
-        print("\nERROR: {}".format(exc), file=sys.stderr)
-        fuente.cerrar()
-        return 2
+        interactivo = bool(sys.stdin and sys.stdin.isatty())
+        try:
+            perfil = elegir_perfil(cal, BASE_VISION, ancho_cam, alto_cam,
+                                   nombre=args.camara, interactivo=interactivo)
+        except ErrorCalibracion as exc:
+            print("\nERROR: {}".format(exc), file=sys.stderr)
+            return 2
 
-    compat = comparar_con_camara(perfil, ancho_cam, alto_cam)
-    print("\nPerfil cargado:")
-    print("  " + perfil.resumen.replace("\n", "\n  "))
-    print(compat.mensaje())
-    print("Apuntá la cámara a algo que sepas que es RECTO: el borde del tablero,")
-    print("las líneas de la cancha, el marco de una puerta. A la izquierda vas a ver")
-    print("la imagen cruda y a la derecha la corregida.\n")
+        compat = comparar_con_camara(perfil, ancho_cam, alto_cam)
+        print("\nPerfil cargado:")
+        print("  " + perfil.resumen.replace("\n", "\n  "))
+        print(compat.mensaje())
+        print("Apuntá la cámara a algo que sepas que es RECTO: el borde del tablero,")
+        print("las líneas de la cancha, el marco de una puerta. A la izquierda vas a ver")
+        print("la imagen cruda y a la derecha la corregida.\n")
 
-    rectificador = None
-    mostrar_rejilla = True
-    alpha = cal.alpha
-    veredicto_curvatura = None  # lo llena la medición sobre el patrón
-    tipografia = Tipografia(escala_para(alto_cam))
-    ventana = "Antes (izq) y despues (der) de corregir la distorsion"
+        rectificador = None
+        mostrar_rejilla = True
+        alpha = cal.alpha
+        veredicto_curvatura = None  # lo llena la medición sobre el patrón
+        tipografia = Tipografia(escala_para(alto_cam))
+        ventana = "Antes (izq) y despues (der) de corregir la distorsion"
 
-    try:
-        while True:
-            cuadro = fuente.leer()
-            if cuadro is None:
-                time.sleep(0.01)
-                continue
-            imagen = cuadro.imagen
-            alto, ancho = imagen.shape[:2]
-            if rectificador is None or rectificador.alpha != alpha:
-                rectificador = Rectificador(perfil, alpha=alpha, tamano=(ancho, alto))
-                if rectificador.aviso:
-                    print("⚠ {}".format(rectificador.aviso))
+        try:
+            while True:
+                cuadro = fuente.leer()
+                if cuadro is None:
+                    time.sleep(0.01)
+                    continue
+                imagen = cuadro.imagen
+                alto, ancho = imagen.shape[:2]
+                if rectificador is None or rectificador.alpha != alpha:
+                    rectificador = Rectificador(perfil, alpha=alpha, tamano=(ancho, alto))
+                    if rectificador.aviso:
+                        print("⚠ {}".format(rectificador.aviso))
 
-            corregida = rectificador.rectificar(imagen)
-            izq = imagen.copy() if imagen.ndim == 3 else cv2.cvtColor(imagen, cv2.COLOR_GRAY2BGR)
-            der = corregida.copy() if corregida.ndim == 3 else cv2.cvtColor(corregida, cv2.COLOR_GRAY2BGR)
+                corregida = rectificador.rectificar(imagen)
+                izq = imagen.copy() if imagen.ndim == 3 else cv2.cvtColor(imagen, cv2.COLOR_GRAY2BGR)
+                der = corregida.copy() if corregida.ndim == 3 else cv2.cvtColor(corregida, cv2.COLOR_GRAY2BGR)
 
-            # Medida numérica de "quedó recto", cuando el patrón está a la vista.
-            #
-            # Esta es la comprobación que decide de verdad si el perfil
-            # corresponde a esta cámara: la huella (resolución y campo de visión)
-            # solo permite sospechar, pero si la corrección EMPEORA unas líneas
-            # que sabemos rectas, no hay nada que discutir. Es el mismo principio
-            # que ya usamos con los ajustes de cámara: verificar por efecto y no
-            # por lo que dice la etiqueta.
-            texto_recta = ""
-            e_antes = detectar_patron(imagen, cal.tamano_patron)
-            if e_antes is not None:
-                d_antes = desviacion_de_recta(e_antes, cal.tamano_patron)
-                e_despues = detectar_patron(corregida, cal.tamano_patron)
-                if e_despues is not None:
-                    d_despues = desviacion_de_recta(e_despues, cal.tamano_patron)
-                    texto_recta = "curvatura de las filas: {:.2f} px → {:.2f} px".format(
-                        d_antes, d_despues)
-                    if d_despues > d_antes * 1.15:
-                        veredicto_curvatura = ("empeora", d_antes, d_despues)
-                    elif d_despues < d_antes * 0.85:
-                        veredicto_curvatura = ("corrige", d_antes, d_despues)
-                cv2.drawChessboardCorners(izq, cal.tamano_patron, e_antes, True)
+                # Medida numérica de "quedó recto", cuando el patrón está a la vista.
+                #
+                # Esta es la comprobación que decide de verdad si el perfil
+                # corresponde a esta cámara: la huella (resolución y campo de visión)
+                # solo permite sospechar, pero si la corrección EMPEORA unas líneas
+                # que sabemos rectas, no hay nada que discutir. Es el mismo principio
+                # que ya usamos con los ajustes de cámara: verificar por efecto y no
+                # por lo que dice la etiqueta.
+                texto_recta = ""
+                e_antes = detectar_patron(imagen, cal.tamano_patron)
+                if e_antes is not None:
+                    d_antes = desviacion_de_recta(e_antes, cal.tamano_patron)
+                    e_despues = detectar_patron(corregida, cal.tamano_patron)
+                    if e_despues is not None:
+                        d_despues = desviacion_de_recta(e_despues, cal.tamano_patron)
+                        texto_recta = "curvatura de las filas: {:.2f} px → {:.2f} px".format(
+                            d_antes, d_despues)
+                        if d_despues > d_antes * 1.15:
+                            veredicto_curvatura = ("empeora", d_antes, d_despues)
+                        elif d_despues < d_antes * 0.85:
+                            veredicto_curvatura = ("corrige", d_antes, d_despues)
+                    cv2.drawChessboardCorners(izq, cal.tamano_patron, e_antes, True)
 
-            if mostrar_rejilla:
-                _rejilla(izq)
-                _rejilla(der)
+                if mostrar_rejilla:
+                    _rejilla(izq)
+                    _rejilla(der)
 
-            cv2.putText(izq, "ORIGINAL (con distorsion)", (20, alto - 24),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, ROJO, 2, cv2.LINE_AA)
-            cv2.putText(der, "CORREGIDA", (20, alto - 24),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, VERDE, 2, cv2.LINE_AA)
+                cv2.putText(izq, "ORIGINAL (con distorsion)", (20, alto - 24),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, ROJO, 2, cv2.LINE_AA)
+                cv2.putText(der, "CORREGIDA", (20, alto - 24),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, VERDE, 2, cv2.LINE_AA)
 
-            par = np.hstack([izq, der])
-            escala = min(1.0, 1600.0 / par.shape[1])
-            if escala < 1.0:
-                par = cv2.resize(par, None, fx=escala, fy=escala, interpolation=cv2.INTER_AREA)
+                par = np.hstack([izq, der])
+                escala = min(1.0, 1600.0 / par.shape[1])
+                if escala < 1.0:
+                    par = cv2.resize(par, None, fx=escala, fy=escala, interpolation=cv2.INTER_AREA)
 
-            # El estado del perfil va como fila PERMANENTE del panel, no como un
-            # mensaje de consola que pasó hace un minuto y ya no está a la vista.
-            panel = Panel(tipografia)
-            panel.titulo("Verificación de la corrección de distorsión")
-            if veredicto_curvatura and veredicto_curvatura[0] == "empeora":
-                panel.destacado("EL PERFIL NO CORRESPONDE", ROJO_P,
-                                "la corrección EMPEORA líneas que son rectas")
-            elif compat.nivel == "incompatible":
-                panel.destacado("EL PERFIL NO CORRESPONDE", ROJO_P, compat.motivo[:70])
-            elif veredicto_curvatura and veredicto_curvatura[0] == "corrige":
-                panel.destacado("El perfil CORRIGE", VERDE_P,
-                                "las líneas rectas quedan rectas")
-            else:
-                panel.destacado("Perfil: {}".format(perfil.camara), BLANCO,
-                                "error {:.3f} px · {}".format(perfil.rms_px, perfil.huella))
-            panel.separador()
-            panel.estado("Perfil", "{} · {}".format(perfil.camara, perfil.huella),
-                         VERDE_P if compat.nivel == "compatible" else
-                         (AMBAR if compat.nivel == "sospechoso" else ROJO_P))
-            panel.estado("Cámara conectada", "{}x{}".format(ancho, alto), GRIS)
-            panel.estado("Compatibilidad", compat.etiqueta,
-                         VERDE_P if compat.nivel == "compatible" else
-                         (AMBAR if compat.nivel == "sospechoso" else ROJO_P))
-            if texto_recta:
-                color_c = VERDE_P
+                # El estado del perfil va como fila PERMANENTE del panel, no como un
+                # mensaje de consola que pasó hace un minuto y ya no está a la vista.
+                panel = Panel(tipografia)
+                panel.titulo("Verificación de la corrección de distorsión")
                 if veredicto_curvatura and veredicto_curvatura[0] == "empeora":
-                    color_c = ROJO_P
-                panel.estado("Rectitud", texto_recta, color_c)
-            panel.separador()
-            panel.datos("recorte alpha = {:.2f}".format(alpha), GRIS)
-            panel.pie("Las líneas naranjas son PERFECTAMENTE rectas: compará contra ellas.")
-            panel.pie("r rejilla  ·  a recorte  ·  g guardar  ·  q salir")
-            panel.dibujar(par)
+                    panel.destacado("EL PERFIL NO CORRESPONDE", ROJO_P,
+                                    "la corrección EMPEORA líneas que son rectas")
+                elif compat.nivel == "incompatible":
+                    panel.destacado("EL PERFIL NO CORRESPONDE", ROJO_P, compat.motivo[:70])
+                elif veredicto_curvatura and veredicto_curvatura[0] == "corrige":
+                    panel.destacado("El perfil CORRIGE", VERDE_P,
+                                    "las líneas rectas quedan rectas")
+                else:
+                    panel.destacado("Perfil: {}".format(perfil.camara), BLANCO,
+                                    "error {:.3f} px · {}".format(perfil.rms_px, perfil.huella))
+                panel.separador()
+                panel.estado("Perfil", "{} · {}".format(perfil.camara, perfil.huella),
+                             VERDE_P if compat.nivel == "compatible" else
+                             (AMBAR if compat.nivel == "sospechoso" else ROJO_P))
+                panel.estado("Cámara conectada", "{}x{}".format(ancho, alto), GRIS)
+                panel.estado("Compatibilidad", compat.etiqueta,
+                             VERDE_P if compat.nivel == "compatible" else
+                             (AMBAR if compat.nivel == "sospechoso" else ROJO_P))
+                if texto_recta:
+                    color_c = VERDE_P
+                    if veredicto_curvatura and veredicto_curvatura[0] == "empeora":
+                        color_c = ROJO_P
+                    panel.estado("Rectitud", texto_recta, color_c)
+                panel.separador()
+                panel.datos("recorte alpha = {:.2f}".format(alpha), GRIS)
+                panel.pie("Las líneas naranjas son PERFECTAMENTE rectas: compará contra ellas.")
+                panel.pie("r rejilla  ·  a recorte  ·  g guardar  ·  q salir")
+                panel.dibujar(par)
 
-            try:
-                cv2.imshow(ventana, par)
-            except cv2.error as exc:
-                print("No se pudo abrir la ventana: {}".format(exc), file=sys.stderr)
-                return 2
-            tecla = cv2.waitKey(1) & 0xFF
-            if tecla in (ord("q"), 27):
-                break
-            if tecla == ord("r"):
-                mostrar_rejilla = not mostrar_rejilla
-            if tecla == ord("a"):
-                alpha = 0.0 if alpha > 0.5 else 1.0
-                print("  recorte alpha = {:.2f}".format(alpha))
-            if tecla == ord("g"):
-                nombre = "verificacion_distorsion_{}.png".format(int(time.time()))
-                cv2.imwrite(nombre, par)
-                print("  guardado: {}".format(nombre))
-    finally:
-        cv2.destroyAllWindows()
-        fuente.cerrar()
-    return 0
+                try:
+                    cv2.imshow(ventana, par)
+                except cv2.error as exc:
+                    print("No se pudo abrir la ventana: {}".format(exc), file=sys.stderr)
+                    return 2
+                tecla = cv2.waitKey(1) & 0xFF
+                if tecla in (ord("q"), 27):
+                    break
+                if tecla == ord("r"):
+                    mostrar_rejilla = not mostrar_rejilla
+                if tecla == ord("a"):
+                    alpha = 0.0 if alpha > 0.5 else 1.0
+                    print("  recorte alpha = {:.2f}".format(alpha))
+                if tecla == ord("g"):
+                    nombre = "verificacion_distorsion_{}.png".format(int(time.time()))
+                    cv2.imwrite(nombre, par)
+                    print("  guardado: {}".format(nombre))
+        finally:
+            cv2.destroyAllWindows()
+        return 0
 
 
 def main(argv: list[str] | None = None) -> int:

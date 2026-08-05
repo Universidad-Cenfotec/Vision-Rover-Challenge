@@ -25,10 +25,10 @@ from collections.abc import Iterator
 from typing import Any
 
 try:  # como paquete: python -m contrato.test_client
-    from .schema import ahora_ms, decodificar_ndjson, validate_message
+    from .schema import DEFAULT_PORT, ahora_ms, decodificar_ndjson, validate_message
 except ImportError:  # como script suelto: python contrato/test_client.py
     from schema import (  # type: ignore[no-redef]
-        ahora_ms, decodificar_ndjson, validate_message,
+        DEFAULT_PORT, ahora_ms, decodificar_ndjson, validate_message,
     )
 
 
@@ -195,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         description="Cliente de referencia: consume, valida y mide el stream de visión."
     )
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=2026)
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument(
         "--duracion", type=float, default=0.0, help="segundos a escuchar (0 = hasta Ctrl-C)"
     )

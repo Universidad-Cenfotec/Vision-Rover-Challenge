@@ -55,8 +55,25 @@ from typing import Any
 #: debe rechazar el mensaje, no adivinar.
 PROTOCOL_VERSION = 1
 
+#: Puerto oficial del sistema de visión. El simulador y la cancha real publican
+#: en el MISMO puerto, para que un equipo pase de uno a otra sin tocar su código.
+#: Es el único lugar donde se define: quien lo necesite lo lee de acá.
+DEFAULT_PORT = 2026
+
 #: Fases de la ronda. La visión es árbitro: ella dice en qué fase se está.
-PHASES: tuple[str, ...] = ("IDLE", "READY", "RUNNING", "FINISHED")
+#:
+#: Cada nombre se define UNA sola vez y `PHASES` se arma con ellos. Si estuvieran
+#: la tupla por un lado y los literales sueltos por otro, un día se
+#: desincronizarían y el productor emitiría una fase que su propio validador
+#: rechaza. Se evita a propósito derivarlos al revés (`A, B, C, D = PHASES`):
+#: eso ataría los nombres al ORDEN de la tupla, y reordenarla intercambiaría los
+#: significados en silencio.
+FASE_IDLE = "IDLE"
+FASE_READY = "READY"
+FASE_RUNNING = "RUNNING"
+FASE_FINISHED = "FINISHED"
+
+PHASES: tuple[str, ...] = (FASE_IDLE, FASE_READY, FASE_RUNNING, FASE_FINISHED)
 
 #: Colores válidos de cubo. El color ES la identidad del cubo: no hay dos cubos
 #: del mismo color, por eso no llevan `id`.

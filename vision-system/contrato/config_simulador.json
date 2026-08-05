@@ -3,8 +3,8 @@
 
   "red": {
     "host": "0.0.0.0",
-    "port": 2026,
-    "_nota_puerto": "2026 es el puerto oficial del sistema de visión. El sistema real publica en el mismo puerto, así un equipo pasa del simulador a la cancha sin tocar su código."
+    "port": null,
+    "_nota_puerto": "null = usar el puerto oficial del contrato: 2026, definido como DEFAULT_PORT en schema.py, que es el ÚNICO lugar donde vive ese número. El sistema real publica en el mismo puerto, así un equipo pasa del simulador a la cancha sin tocar su código. Poné un número acá solo si necesitás otro puerto; también se puede con --port."
   },
 
   "grid": {

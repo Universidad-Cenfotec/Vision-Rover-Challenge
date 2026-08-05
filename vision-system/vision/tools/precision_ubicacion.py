@@ -551,162 +551,160 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: {}".format(exc), file=sys.stderr)
         return 2
 
-    primero = None
-    limite = time.monotonic() + 10.0
-    while primero is None and time.monotonic() < limite:
-        primero = camara.leer()
-        time.sleep(0.01)
-    if primero is None:
-        print("ERROR: la cámara no entregó imágenes.", file=sys.stderr)
-        camara.cerrar()
-        return 2
-    alto, ancho = primero.imagen.shape[:2]
+    with camara:
+        primero = None
+        limite = time.monotonic() + 10.0
+        while primero is None and time.monotonic() < limite:
+            primero = camara.leer()
+            time.sleep(0.01)
+        if primero is None:
+            print("ERROR: la cámara no entregó imágenes.", file=sys.stderr)
+            return 2
+        alto, ancho = primero.imagen.shape[:2]
 
-    interactivo = bool(sys.stdin and sys.stdin.isatty())
-    try:
-        perfil = elegir_perfil(cfg.calibracion, BASE_VISION, ancho, alto,
-                               nombre=args.camara, interactivo=interactivo)
-    except ErrorCalibracion as exc:
-        print("\nERROR: {}".format(exc), file=sys.stderr)
-        camara.cerrar()
-        return 2
+        interactivo = bool(sys.stdin and sys.stdin.isatty())
+        try:
+            perfil = elegir_perfil(cfg.calibracion, BASE_VISION, ancho, alto,
+                                   nombre=args.camara, interactivo=interactivo)
+        except ErrorCalibracion as exc:
+            print("\nERROR: {}".format(exc), file=sys.stderr)
+            return 2
 
-    compat = comparar_con_camara(perfil, ancho, alto)
-    print(compat.mensaje())
+        compat = comparar_con_camara(perfil, ancho, alto)
+        print(compat.mensaje())
 
-    # La corrección de distorsión se aplica ANTES de medir: es la misma cadena
-    # que va a usar el sistema real, y medir sin ella daría un número que no
-    # corresponde a nada.
-    fuente = FuenteRectificada(camara, Rectificador(perfil, alpha=cfg.calibracion.alpha,
-                                                    tamano=(ancho, alto)))
+        # La corrección de distorsión se aplica ANTES de medir: es la misma cadena
+        # que va a usar el sistema real, y medir sin ella daría un número que no
+        # corresponde a nada.
+        fuente = FuenteRectificada(camara, Rectificador(perfil, alpha=cfg.calibracion.alpha,
+                                                        tamano=(ancho, alto)))
 
-    pasos = plan_de_medicion(cfg)
-    mediciones: list[Medicion] = []
-    tipografia = Tipografia(escala_para(alto))
-    ventana = "Precision de ubicacion"
-    indice_paso = 0
-    etapa = "A"
-    actual = None
-    mensaje = ""
+        pasos = plan_de_medicion(cfg)
+        mediciones: list[Medicion] = []
+        tipografia = Tipografia(escala_para(alto))
+        ventana = "Precision de ubicacion"
+        indice_paso = 0
+        etapa = "A"
+        actual = None
+        mensaje = ""
 
-    try:
-        while indice_paso < len(pasos):
-            zona, col_obj, row_obj, direccion = pasos[indice_paso]
-            nombre_dir = _DIRECCIONES[direccion]
-            if actual is None:
-                actual = Medicion(zona, direccion, cuadros, cfg.tablero.cell_mm, k)
+        try:
+            while indice_paso < len(pasos):
+                zona, col_obj, row_obj, direccion = pasos[indice_paso]
+                nombre_dir = _DIRECCIONES[direccion]
+                if actual is None:
+                    actual = Medicion(zona, direccion, cuadros, cfg.tablero.cell_mm, k)
 
-            cuadro = fuente.leer()
-            if cuadro is None:
-                time.sleep(0.01)
-                continue
-            lienzo = cuadro.imagen.copy()
-            centro, detectados = _posicion_marcador(lienzo, cfg, pr.id_marcador_prueba)
+                cuadro = fuente.leer()
+                if cuadro is None:
+                    time.sleep(0.01)
+                    continue
+                lienzo = cuadro.imagen.copy()
+                centro, detectados = _posicion_marcador(lienzo, cfg, pr.id_marcador_prueba)
 
-            celda_actual = None
-            try:
-                sistema = construir_sistema(cuadro.imagen, cfg)
-                hay_esquinas = True
-                if centro is not None:
-                    celda_actual = sistema.celda_de(float(centro[0]), float(centro[1]))
-            except ErrorGeometria:
-                hay_esquinas = False
+                celda_actual = None
+                try:
+                    sistema = construir_sistema(cuadro.imagen, cfg)
+                    hay_esquinas = True
+                    if centro is not None:
+                        celda_actual = sistema.celda_de(float(centro[0]), float(centro[1]))
+                except ErrorGeometria:
+                    hay_esquinas = False
 
-            for id_m, esq in detectados.items():
-                color = (_VERDE_BGR if id_m == pr.id_marcador_prueba else _AMARILLO_BGR)
-                cv2.polylines(lienzo, [esq.astype(np.int32).reshape(-1, 1, 2)], True, color, 2)
+                for id_m, esq in detectados.items():
+                    color = (_VERDE_BGR if id_m == pr.id_marcador_prueba else _AMARILLO_BGR)
+                    cv2.polylines(lienzo, [esq.astype(np.int32).reshape(-1, 1, 2)], True, color, 2)
 
-            panel = Panel(tipografia)
-            panel.titulo("Precisión de ubicación · paso {} de {}".format(
-                indice_paso + 1, len(pasos)))
-            panel.destacado("{} · {}".format(zona, direccion), BLANCO,
-                            "objetivo aproximado: celda ({:.0f}, {:.0f})".format(col_obj, row_obj))
-            panel.separador()
-            if etapa == "A":
-                panel.datos("1) Alineá el marcador a la cuadrícula en esta zona")
-                panel.datos("2) ESPACIO para capturar el punto A", GRIS)
-            else:
-                panel.datos("3) Movelo {} cuadros hacia {} = {:.0f} mm".format(
-                    cuadros, nombre_dir, cuadros * cfg.tablero.cell_mm))
-                panel.datos("4) ESPACIO para capturar el punto B", GRIS)
-            panel.separador()
-            panel.estado("Esquinas", "4 de 4" if hay_esquinas else "faltan marcadores",
-                         VERDE if hay_esquinas else ROJO)
-            panel.estado("Marcador {}".format(pr.id_marcador_prueba),
-                         "celda ({:.2f}, {:.2f})".format(*celda_actual) if celda_actual
-                         else "no se ve", VERDE if celda_actual else ROJO)
-            if mensaje:
+                panel = Panel(tipografia)
+                panel.titulo("Precisión de ubicación · paso {} de {}".format(
+                    indice_paso + 1, len(pasos)))
+                panel.destacado("{} · {}".format(zona, direccion), BLANCO,
+                                "objetivo aproximado: celda ({:.0f}, {:.0f})".format(col_obj, row_obj))
                 panel.separador()
-                panel.datos(mensaje, AMBAR)
-            panel.separador()
-            panel.pie("espacio capturar · r rehacer zona · s saltear · q terminar")
-            panel.dibujar(lienzo)
-
-            escala = min(1.0, 1400.0 / lienzo.shape[1])
-            if escala < 1.0:
-                lienzo = cv2.resize(lienzo, None, fx=escala, fy=escala,
-                                    interpolation=cv2.INTER_AREA)
-            try:
-                cv2.imshow(ventana, lienzo)
-            except cv2.error as exc:
-                print("No se pudo abrir la ventana: {}".format(exc), file=sys.stderr)
-                return 2
-            tecla = cv2.waitKey(1) & 0xFF
-
-            if tecla in (ord("q"), 27):
-                break
-            if tecla == ord("s"):
-                indice_paso += 1
-                actual, etapa, mensaje = None, "A", ""
-                continue
-            if tecla == ord("r"):
-                actual, etapa, mensaje = None, "A", "zona reiniciada"
-                continue
-            if tecla == ord(" "):
-                if not hay_esquinas:
-                    mensaje = "faltan marcadores de esquina: no se puede medir"
-                    continue
-                posicion, ruido = capturar_posicion(
-                    fuente, cfg, pr.id_marcador_prueba, pr.muestras_por_punto)
-                if posicion is None:
-                    mensaje = "no se pudo ver el marcador el tiempo suficiente"
-                    continue
-                if not lejos_de_las_esquinas(posicion, cfg, pr.margen_marcadores_celdas):
-                    mensaje = ("demasiado cerca de un marcador de esquina: corré el "
-                               "marcador hacia adentro")
-                    continue
                 if etapa == "A":
-                    actual.a, actual.ruido_a_mm = posicion, ruido
-                    etapa = "B"
-                    mensaje = "punto A tomado (ruido {:.2f} mm)".format(ruido)
+                    panel.datos("1) Alineá el marcador a la cuadrícula en esta zona")
+                    panel.datos("2) ESPACIO para capturar el punto A", GRIS)
                 else:
-                    actual.b, actual.ruido_b_mm = posicion, ruido
-                    mediciones.append(actual)
-                    print("  {:<16} {:<11} real {:.0f} mm · reportado {:.1f} mm · "
-                          "error {:.2f} mm · ruido {:.2f} mm".format(
-                              actual.zona, actual.direccion, actual.distancia_real_mm,
-                              actual.distancia_sin_paralaje_mm, actual.error_mm,
-                              actual.ruido_mm))
-                    indice_paso += 1
-                    actual, etapa = None, "A"
-                    mensaje = ""
-    except KeyboardInterrupt:
-        pass
-    finally:
-        cv2.destroyAllWindows()
+                    panel.datos("3) Movelo {} cuadros hacia {} = {:.0f} mm".format(
+                        cuadros, nombre_dir, cuadros * cfg.tablero.cell_mm))
+                    panel.datos("4) ESPACIO para capturar el punto B", GRIS)
+                panel.separador()
+                panel.estado("Esquinas", "4 de 4" if hay_esquinas else "faltan marcadores",
+                             VERDE if hay_esquinas else ROJO)
+                panel.estado("Marcador {}".format(pr.id_marcador_prueba),
+                             "celda ({:.2f}, {:.2f})".format(*celda_actual) if celda_actual
+                             else "no se ve", VERDE if celda_actual else ROJO)
+                if mensaje:
+                    panel.separador()
+                    panel.datos(mensaje, AMBAR)
+                panel.separador()
+                panel.pie("espacio capturar · r rehacer zona · s saltear · q terminar")
+                panel.dibujar(lienzo)
 
-    print(_resumen(mediciones, perfil, cfg, ancho, alto))
-    completas = [m for m in mediciones if m.completa]
-    if completas:
-        ruta = os.path.join(BASE_VISION, pr.carpeta_mediciones,
-                            "{}_{}.json".format(perfil.nombre,
-                                                datetime.datetime.now().strftime("%Y%m%d_%H%M")))
-        guardar_sesion(mediciones, perfil, cfg, ancho, alto, ruta)
-        print("\n  medición guardada en: {}".format(ruta))
-        print("  Para comparar todas las cámaras medidas:")
-        print("    python -m vision.tools.precision_ubicacion --comparar")
-    fuente.cerrar()
-    return 0 if completas and max(m.error_mm for m in completas) < umbral else 1
+                escala = min(1.0, 1400.0 / lienzo.shape[1])
+                if escala < 1.0:
+                    lienzo = cv2.resize(lienzo, None, fx=escala, fy=escala,
+                                        interpolation=cv2.INTER_AREA)
+                try:
+                    cv2.imshow(ventana, lienzo)
+                except cv2.error as exc:
+                    print("No se pudo abrir la ventana: {}".format(exc), file=sys.stderr)
+                    return 2
+                tecla = cv2.waitKey(1) & 0xFF
+
+                if tecla in (ord("q"), 27):
+                    break
+                if tecla == ord("s"):
+                    indice_paso += 1
+                    actual, etapa, mensaje = None, "A", ""
+                    continue
+                if tecla == ord("r"):
+                    actual, etapa, mensaje = None, "A", "zona reiniciada"
+                    continue
+                if tecla == ord(" "):
+                    if not hay_esquinas:
+                        mensaje = "faltan marcadores de esquina: no se puede medir"
+                        continue
+                    posicion, ruido = capturar_posicion(
+                        fuente, cfg, pr.id_marcador_prueba, pr.muestras_por_punto)
+                    if posicion is None:
+                        mensaje = "no se pudo ver el marcador el tiempo suficiente"
+                        continue
+                    if not lejos_de_las_esquinas(posicion, cfg, pr.margen_marcadores_celdas):
+                        mensaje = ("demasiado cerca de un marcador de esquina: corré el "
+                                   "marcador hacia adentro")
+                        continue
+                    if etapa == "A":
+                        actual.a, actual.ruido_a_mm = posicion, ruido
+                        etapa = "B"
+                        mensaje = "punto A tomado (ruido {:.2f} mm)".format(ruido)
+                    else:
+                        actual.b, actual.ruido_b_mm = posicion, ruido
+                        mediciones.append(actual)
+                        print("  {:<16} {:<11} real {:.0f} mm · reportado {:.1f} mm · "
+                              "error {:.2f} mm · ruido {:.2f} mm".format(
+                                  actual.zona, actual.direccion, actual.distancia_real_mm,
+                                  actual.distancia_sin_paralaje_mm, actual.error_mm,
+                                  actual.ruido_mm))
+                        indice_paso += 1
+                        actual, etapa = None, "A"
+                        mensaje = ""
+        except KeyboardInterrupt:
+            pass
+        finally:
+            cv2.destroyAllWindows()
+
+        print(_resumen(mediciones, perfil, cfg, ancho, alto))
+        completas = [m for m in mediciones if m.completa]
+        if completas:
+            ruta = os.path.join(BASE_VISION, pr.carpeta_mediciones,
+                                "{}_{}.json".format(perfil.nombre,
+                                                    datetime.datetime.now().strftime("%Y%m%d_%H%M")))
+            guardar_sesion(mediciones, perfil, cfg, ancho, alto, ruta)
+            print("\n  medición guardada en: {}".format(ruta))
+            print("  Para comparar todas las cámaras medidas:")
+            print("    python -m vision.tools.precision_ubicacion --comparar")
+        return 0 if completas and max(m.error_mm for m in completas) < umbral else 1
 
 
 if __name__ == "__main__":

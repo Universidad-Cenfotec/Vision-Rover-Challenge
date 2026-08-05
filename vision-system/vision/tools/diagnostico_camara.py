@@ -246,7 +246,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.sintetico:
         print("Usando el generador sintético (sin cámara).")
         fuente = FuenteSintetica(cfg)
-        informes, efectos = (), ()
     else:
         print("Abriendo la cámara {}...".format(
             args.indice if args.indice is not None else cfg.camara.indice))
@@ -257,112 +256,116 @@ def main(argv: list[str] | None = None) -> int:
             print("\nProbá 'python -m vision.tools.diagnostico_camara --listar' para ver "
                   "qué cámaras responden.", file=sys.stderr)
             return 2
-        if fuente.aviso:
-            print("\n⚠ {}\n".format(fuente.aviso))
-        informes = fuente.informes
-        efectos = ()
-        if not args.sin_efecto:
-            print("Verificando si los ajustes tienen efecto real (unos segundos)...")
-            try:
-                efectos = verificar_por_efecto(fuente)
-            except ErrorCamara as exc:
-                print("  no se pudo completar la verificación: {}".format(exc))
 
-    # --- bucle ------------------------------------------------------------
-    inicio = time.monotonic()
-    ultimo_aviso = 0.0
-    detectados: dict = {}
-    ventana = "Diagnostico de camara — Vision Rover Challenge"
-    hay_ventana = not args.sin_ventana
-    # La tipografía se carga una sola vez: el panel se dibuja en cada cuadro y
-    # abrir la fuente cada vez costaría más que dibujar.
-    tipografia = Tipografia()
-    if hay_ventana and not tipografia.disponible:
-        print("(Pillow no está instalado: el panel va sin acentos. "
-              "Se arregla con 'pip install pillow'.)")
-
-    try:
-        while True:
-            cuadro = fuente.leer()
-            if cuadro is None:
-                time.sleep(0.01)
-                if time.monotonic() - inicio > 10:
-                    print("La cámara no entregó ningún cuadro en 10 s.", file=sys.stderr)
-                    return 2
-                continue
-
-            detectados = detectar_marcadores(
-                cuadro.imagen, cfg.marcadores_esquina.nombre_diccionario)
-            encontrados = sorted(set(detectados) & set(esperados))
-            completo = len(encontrados) == len(esperados)
-
-            if hay_ventana:
-                lienzo = cuadro.imagen.copy()
-                if lienzo.ndim == 2:
-                    lienzo = cv2.cvtColor(lienzo, cv2.COLOR_GRAY2BGR)
-                # El panel se escala con la resolución: uno pensado para 1080p
-                # queda ilegible a 480p y ridículo a 4K.
-                escala = escala_para(lienzo.shape[0])
-                if abs(tipografia.escala - escala) > 0.01:
-                    tipografia = Tipografia(escala)
-                _dibujar_marcadores(lienzo, detectados, esperados)
-                fmt = fuente.formato_negociado() if hasattr(fuente, "formato_negociado") else {}
-
-                panel = Panel(tipografia)
-                panel.titulo("Diagnóstico de cámara")
-                panel.destacado(
-                    "{} / {}  marcadores de esquina".format(len(encontrados), len(esperados)),
-                    VERDE if completo else ROJO,
-                    "IDs {}".format(" · ".join(str(i) for i in encontrados)) if encontrados
-                    else "no se ve ninguno todavía",
-                )
-                panel.separador()
-                panel.datos("{}×{}    {}    {:.1f} fps    edad {} ms".format(
-                    fmt.get("ancho", lienzo.shape[1]), fmt.get("alto", lienzo.shape[0]),
-                    fmt.get("fourcc", "sintético"), getattr(fuente, "fps_real", 0.0),
-                    cuadro.edad_ms()))
-                estados = _estados_ajustes(informes, efectos)
-                if estados:
-                    panel.separador()
-                    for etiqueta, texto, color in estados:
-                        panel.estado(etiqueta, texto, color)
-                panel.separador()
-                panel.pie("q  salir     ·     g  guardar imagen")
-                panel.dibujar(lienzo)
+    # Desde acá la fuente existe, así que TODO lo que sigue va dentro del `with`:
+    # la verificación por efecto y la carga de la tipografía también pueden
+    # fallar, y sin esto dejarían la cámara tomada.
+    with fuente:
+        informes, efectos = (), ()
+        if not args.sintetico:
+            if fuente.aviso:
+                print("\n⚠ {}\n".format(fuente.aviso))
+            informes = fuente.informes
+            if not args.sin_efecto:
+                print("Verificando si los ajustes tienen efecto real (unos segundos)...")
                 try:
-                    cv2.imshow(ventana, lienzo)
-                except cv2.error as exc:
-                    print("No se pudo abrir la ventana ({}). Sigo sin ventana.".format(exc))
-                    hay_ventana = False
+                    efectos = verificar_por_efecto(fuente)
+                except ErrorCamara as exc:
+                    print("  no se pudo completar la verificación: {}".format(exc))
+        # --- bucle ------------------------------------------------------------
+        inicio = time.monotonic()
+        ultimo_aviso = 0.0
+        detectados: dict = {}
+        ventana = "Diagnostico de camara — Vision Rover Challenge"
+        hay_ventana = not args.sin_ventana
+        # La tipografía se carga una sola vez: el panel se dibuja en cada cuadro y
+        # abrir la fuente cada vez costaría más que dibujar.
+        tipografia = Tipografia()
+        if hay_ventana and not tipografia.disponible:
+            print("(Pillow no está instalado: el panel va sin acentos. "
+                  "Se arregla con 'pip install pillow'.)")
+
+        try:
+            while True:
+                cuadro = fuente.leer()
+                if cuadro is None:
+                    time.sleep(0.01)
+                    if time.monotonic() - inicio > 10:
+                        print("La cámara no entregó ningún cuadro en 10 s.", file=sys.stderr)
+                        return 2
                     continue
-                tecla = cv2.waitKey(1) & 0xFF
-                if tecla in (ord("q"), 27):
+
+                detectados = detectar_marcadores(
+                    cuadro.imagen, cfg.marcadores_esquina.nombre_diccionario)
+                encontrados = sorted(set(detectados) & set(esperados))
+                completo = len(encontrados) == len(esperados)
+
+                if hay_ventana:
+                    lienzo = cuadro.imagen.copy()
+                    if lienzo.ndim == 2:
+                        lienzo = cv2.cvtColor(lienzo, cv2.COLOR_GRAY2BGR)
+                    # El panel se escala con la resolución: uno pensado para 1080p
+                    # queda ilegible a 480p y ridículo a 4K.
+                    escala = escala_para(lienzo.shape[0])
+                    if abs(tipografia.escala - escala) > 0.01:
+                        tipografia = Tipografia(escala)
+                    _dibujar_marcadores(lienzo, detectados, esperados)
+                    fmt = fuente.formato_negociado() if hasattr(fuente, "formato_negociado") else {}
+
+                    panel = Panel(tipografia)
+                    panel.titulo("Diagnóstico de cámara")
+                    panel.destacado(
+                        "{} / {}  marcadores de esquina".format(len(encontrados), len(esperados)),
+                        VERDE if completo else ROJO,
+                        "IDs {}".format(" · ".join(str(i) for i in encontrados)) if encontrados
+                        else "no se ve ninguno todavía",
+                    )
+                    panel.separador()
+                    panel.datos("{}×{}    {}    {:.1f} fps    edad {} ms".format(
+                        fmt.get("ancho", lienzo.shape[1]), fmt.get("alto", lienzo.shape[0]),
+                        fmt.get("fourcc", "sintético"), getattr(fuente, "fps_real", 0.0),
+                        cuadro.edad_ms()))
+                    estados = _estados_ajustes(informes, efectos)
+                    if estados:
+                        panel.separador()
+                        for etiqueta, texto, color in estados:
+                            panel.estado(etiqueta, texto, color)
+                    panel.separador()
+                    panel.pie("q  salir     ·     g  guardar imagen")
+                    panel.dibujar(lienzo)
+                    try:
+                        cv2.imshow(ventana, lienzo)
+                    except cv2.error as exc:
+                        print("No se pudo abrir la ventana ({}). Sigo sin ventana.".format(exc))
+                        hay_ventana = False
+                        continue
+                    tecla = cv2.waitKey(1) & 0xFF
+                    if tecla in (ord("q"), 27):
+                        break
+                    if tecla == ord("g"):
+                        nombre = "diagnostico_{}.png".format(int(time.time()))
+                        cv2.imwrite(nombre, lienzo)
+                        print("  imagen guardada: {}".format(nombre))
+                else:
+                    ahora = time.monotonic()
+                    if ahora - ultimo_aviso >= 1.0:
+                        ultimo_aviso = ahora
+                        print("  {:.1f} fps · edad {} ms · marcadores de esquina {}/{} {}".format(
+                            getattr(fuente, "fps_real", 0.0), cuadro.edad_ms(),
+                            len(encontrados), len(esperados), encontrados))
+                    time.sleep(0.02)
+
+                if args.segundos > 0 and time.monotonic() - inicio >= args.segundos:
                     break
-                if tecla == ord("g"):
-                    nombre = "diagnostico_{}.png".format(int(time.time()))
-                    cv2.imwrite(nombre, lienzo)
-                    print("  imagen guardada: {}".format(nombre))
-            else:
-                ahora = time.monotonic()
-                if ahora - ultimo_aviso >= 1.0:
-                    ultimo_aviso = ahora
-                    print("  {:.1f} fps · edad {} ms · marcadores de esquina {}/{} {}".format(
-                        getattr(fuente, "fps_real", 0.0), cuadro.edad_ms(),
-                        len(encontrados), len(esperados), encontrados))
-                time.sleep(0.02)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            if hay_ventana:
+                cv2.destroyAllWindows()
+            print(_resumen_texto(fuente, informes, efectos, detectados, esperados))
 
-            if args.segundos > 0 and time.monotonic() - inicio >= args.segundos:
-                break
-    except KeyboardInterrupt:
-        pass
-    finally:
-        if hay_ventana:
-            cv2.destroyAllWindows()
-        print(_resumen_texto(fuente, informes, efectos, detectados, esperados))
-        fuente.cerrar()
-
-    encontrados = sorted(set(detectados) & set(esperados))
-    return 0 if len(encontrados) == len(esperados) else 1
+        encontrados = sorted(set(detectados) & set(esperados))
+        return 0 if len(encontrados) == len(esperados) else 1
 
 
 if __name__ == "__main__":

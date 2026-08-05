@@ -50,6 +50,11 @@ from typing import Any
 try:  # como paquete: python -m contrato.mock_publisher
     from .schema import (
         CUBE_COLORS,
+        DEFAULT_PORT,
+        FASE_FINISHED,
+        FASE_IDLE,
+        FASE_READY,
+        FASE_RUNNING,
         PROTOCOL_VERSION,
         Cube,
         Depot,
@@ -64,6 +69,11 @@ try:  # como paquete: python -m contrato.mock_publisher
 except ImportError:  # como script suelto: python contrato/mock_publisher.py
     from schema import (  # type: ignore[no-redef]
         CUBE_COLORS,
+        DEFAULT_PORT,
+        FASE_FINISHED,
+        FASE_IDLE,
+        FASE_READY,
+        FASE_RUNNING,
         PROTOCOL_VERSION,
         Cube,
         Depot,
@@ -150,7 +160,10 @@ def cargar_config(ruta: str) -> Config:
 
     return Config(
         host=red["host"],
-        port=int(red["port"]),
+        # `port` es opcional: si falta o viene en null se usa el puerto oficial
+        # del contrato. Así el 2026 está definido en un solo lugar (schema.py) y
+        # esta clave queda como anulación para quien necesite otro puerto.
+        port=int(red["port"]) if red.get("port") is not None else DEFAULT_PORT,
         grid=Grid(cols=int(grid["cols"]), rows=int(grid["rows"]), cell_mm=float(grid["cell_mm"])),
         start=Start(col=float(d["start"]["col"]), row=float(d["start"]["row"])),
         depots=tuple(
@@ -286,7 +299,7 @@ class Simulador:
         """
         t = ahora_ms()
 
-        if phase == "RUNNING":
+        if phase == FASE_RUNNING:
             self._mover_rovers(dt_s)
 
         rovers = self._observar_rovers(t)
@@ -583,14 +596,14 @@ class Fase:
     """
 
     _TRANSICIONES = {
-        "ready": (("IDLE", "FINISHED"), "READY"),
-        "start": (("READY",), "RUNNING"),
-        "stop": (("RUNNING", "READY"), "FINISHED"),
+        "ready": ((FASE_IDLE, FASE_FINISHED), FASE_READY),
+        "start": ((FASE_READY,), FASE_RUNNING),
+        "stop": ((FASE_RUNNING, FASE_READY), FASE_FINISHED),
     }
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._valor = "IDLE"
+        self._valor = FASE_IDLE
 
     @property
     def valor(self) -> str:
