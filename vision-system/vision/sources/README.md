@@ -68,7 +68,7 @@ from vision.sources.generador_sintetico import generar
 
 cfg = cargar_config()
 imagen, verdad = generar(cfg)
-print(verdad.celda_a_pixel(25, 25))   # dónde quedó el centro del tablero
+print(verdad.celda_a_pixel(21.5, 21.5))   # el centro de la cancha -> (640.0, 640.0)
 ```
 
 Incluye, configurable desde `config_vision.json`:
@@ -86,13 +86,42 @@ verificar lo que deduce.
 > *imágenes*, para que el sistema de visión tenga qué procesar. Uno se consume
 > por TCP; el otro entra por el lado de la cámara.
 
+### Elegir qué cámara abrir
+
+El índice de una webcam USB **no es estable**: depende de qué se enchufó
+primero, de si hay una cámara integrada y de si la máquina se reinició. Un
+número escrito en la configuración funciona hoy y falla mañana, con un error que
+parece de permisos o de cámara rota y no lo es.
+
+Por eso `camara.indice` en `config_vision.json` acepta tres cosas:
+
+| Valor | Qué hace |
+|---|---|
+| un número | Lo usa, **si responde**. Es el camino rápido: no sondea nada ni molesta a nadie. |
+| `"menu"` | Muestra las cámaras del sistema numeradas y pregunta cuál abrir. |
+| `"auto"` | Toma la primera que entregue imágenes. |
+
+Si el índice pedido no responde, se prueban los demás y se usa el primero que
+entregue imágenes, **avisando cuál se eligió**: es preferible funcionar con un
+aviso a fallar por un número desactualizado.
+
+> **El menú lista los nombres y los índices por separado, a propósito.** Sería
+> más cómodo mostrar "índice 0 → Logitech C270", pero **ese apareo sería
+> falso**: en macOS el orden en que el sistema operativo lista las cámaras y el
+> orden de los índices de OpenCV **no coinciden** —lo comprobamos en esta
+> máquina, donde el índice 0 era la webcam USB y el sistema listaba primero la
+> integrada—. Aparearlos daría una respuesta con aspecto de certeza y
+> equivocada, que es peor que pedirle a la persona que mire cuál se abre.
+
+El menú se arma con la lista del **sistema operativo**, no con el resultado de
+sondear. Sondear es lento y poco confiable, y usarlo para decidir qué mostrar
+fue justo lo que hizo que se eligiera sola la cámara equivocada: si la del
+tablero no contestaba en ese intento, desaparecía del menú.
+
 ## Lo que todavía NO existe
 
 Planificado, sin código aún:
 
-- **Elegir la cámara por nombre y no por índice.** Hoy se abre por número de
-  índice, que cambia según qué se enchufó primero. Identificarla por su nombre
-  evitaría abrir la cámara integrada de la laptop por error.
 - **Reconexión automática.** Si la webcam se desconecta a mitad de ronda, hoy la
   fuente cuenta fallos y sigue devolviendo el último cuadro; falta que intente
   reabrirla sola.

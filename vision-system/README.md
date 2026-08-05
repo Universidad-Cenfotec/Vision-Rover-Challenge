@@ -110,31 +110,36 @@ rover que decide girar:
   │   captura       │      exacta en que se tomó.
   └────────┬────────┘
            ▼
-  ┌─────────────────┐   ②  Encuentra los 4 marcadores ArUco de esquina y con
-  │   geometry/     │      ellos arma el sistema de coordenadas: convierte
-  │   píxeles→celdas│      píxeles en celdas. Corrige la distorsión del lente
-  └────────┬────────┘      y el paralaje de los objetos altos.
+  ┌─────────────────┐   ②  Quita la curvatura que mete el lente gran angular,
+  │   geometry/     │      usando el perfil de ESA cámara. Va antes que todo lo
+  │   rectificación │      demás: la geometría de ③ supone que las rectas del
+  └────────┬────────┘      mundo se ven rectas, y la distorsión rompe eso.
            ▼
-  ┌─────────────────┐   ③  Busca los rovers por su marcador ArUco, y los cubos
+  ┌─────────────────┐   ③  Encuentra los 4 marcadores ArUco de esquina y con
+  │   geometry/     │      ellos arma el sistema de coordenadas, que convierte
+  │   píxeles→celdas│      cualquier píxel en su celda.
+  └────────┬────────┘
+           ▼
+  ┌─────────────────┐   ④  Busca los rovers por su marcador ArUco, y los cubos
   │   detectors/    │      y obstáculos por color. Solo DETECTA: no interpreta.
   │   qué hay dónde │
   └────────┬────────┘
            ▼
-  ┌─────────────────┐   ④  Mantiene la identidad de cada objeto entre cuadros.
+  ┌─────────────────┐   ⑤  Mantiene la identidad de cada objeto entre cuadros.
   │   tracking/     │      Si algo se tapa, conserva su última posición y le
   │   identidad     │      hace crecer la "edad" en vez de hacerlo desaparecer.
   └────────┬────────┘
            │
            ▼
   ╔═══════════════════════════════════╗
-  ║      ESTADO DEL MUNDO             ║   ⑤  Una foto completa e INMUTABLE de
+  ║      ESTADO DEL MUNDO             ║   ⑥  Una foto completa e INMUTABLE de
   ║   (inmutable, se produce uno      ║      la cancha en un instante. Es lo
   ║    nuevo en cada cuadro)          ║      ÚNICO que cruza de un lado al otro.
   ╚═══════════════┬═══════════════════╝
                   │
          ┌────────┴─────────┐
          ▼                  ▼
-  ┌─────────────┐    ┌─────────────┐   ⑥  Dos consumidores independientes que
+  ┌─────────────┐    ┌─────────────┐   ⑦  Dos consumidores independientes que
   │  publish/   │    │   record/   │      solo LEEN el estado del mundo.
   │  a la red   │    │  a disco    │
   └──────┬──────┘    └─────────────┘
@@ -145,7 +150,7 @@ rover que decide girar:
     ─────┼──────────────────────────────────────────────────────────────────
          ▼
   ┌──────────────────┐
-  │ código del equipo│   ⑦  Lee líneas, parsea el JSON, busca SU rover por id,
+  │ código del equipo│   ⑧  Lee líneas, parsea el JSON, busca SU rover por id,
   │  (computadora    │      calcula a dónde ir…
   │   o ESP32)       │
   └────────┬─────────┘
@@ -156,13 +161,28 @@ rover que decide girar:
      └──────────┘
 ```
 
+### Qué de todo esto ya funciona
+
+El diagrama muestra el recorrido **completo**, que es a dónde va el sistema. Hoy
+está construido hasta la mitad:
+
+| Paso | Estado |
+|---|---|
+| ① captura · ② rectificación · ③ píxeles→celdas | ✅ **escritos y verificados** |
+| ④ detectores · ⑤ seguimiento · ⑥ estado del mundo · ⑦ consumidores | ⚪ todavía no existen |
+
+Las tres primeras etapas existen como **piezas sueltas y probadas**, pero
+**todavía no hay un programa que las encadene**: se ejercitan desde las
+herramientas de `vision/tools/`, no desde un bucle de producción. El detalle
+pieza por pieza está en la [sección 9](#9-estado-actual-del-proyecto).
+
 ### Dos relojes que no se esperan
 
 Hay un detalle que define toda la arquitectura: **el procesamiento y la
 publicación corren a ritmos distintos y no se bloquean entre sí**.
 
-- El **procesamiento** (pasos ① a ④) va a la velocidad de la cámara.
-- La **publicación** (paso ⑥) va por temporizador propio.
+- El **procesamiento** (pasos ① a ⑤) va a la velocidad de la cámara.
+- La **publicación** (paso ⑦) va por temporizador propio.
 
 Si un cuadro tarda de más en procesarse, la publicación no se frena: vuelve a
 mandar el último estado bueno. Y si un equipo tiene la red lenta, el
@@ -190,6 +210,23 @@ Toda la arquitectura se apoya en una idea única:
 | **Productores** | `sources/`, `geometry/`, `detectors/`, `tracking/` | Convierten imágenes en un estado del mundo |
 | **Interfaz** | el **estado del mundo** | Una foto inmutable de la cancha en un instante |
 | **Consumidores** | `publish/`, `record/` | Solo leen ese estado. Nunca lo modifican |
+
+### Las capas se apilan, no se modifican entre sí
+
+La corrección de distorsión es el primer ejemplo construido de una idea que se va
+a repetir: **una etapa nueva se agrega envolviendo a la anterior, no editándola.**
+
+`FuenteRectificada` recibe una fuente de imágenes y **es** una fuente de
+imágenes. Se pone delante de la cámara y todo lo que viene después no se entera:
+
+```
+FuenteRectificada( FuenteCamara(...) )   ──►  .leer()  ──►  cuadro ya corregido
+```
+
+Se hizo por composición y no metiéndole la corrección a la cámara por dos
+razones. Son **dos responsabilidades distintas** —capturar y corregir—, y así la
+misma capa sirve también para la **fuente sintética**, que es lo que permite
+verificar el sistema sin cámara.
 
 ### Por qué el estado del mundo es inmutable
 
@@ -224,25 +261,49 @@ Vision-Rover-Challenge/              # raíz del repositorio (fork de CENFOTEC)
     │   ├── schema.py                # el formato en código (uso interno)
     │   ├── mock_publisher.py        # simulador: telemetría sin cámara
     │   ├── test_client.py           # cliente de referencia
-    │   └── config_simulador.json
+    │   ├── config_simulador.json
+    │   └── requirements.txt         # vacío a propósito: no hay dependencias
     │
     └── vision/                      # ◄── EL SISTEMA DE VISIÓN
         ├── README.md
-        ├── configuracion.py         # carga la configuración
+        ├── configuracion.py         # carga y valida la configuración
         ├── config_vision.json       # toda la configuración, como datos
         ├── requirements.txt
         │
         ├── sources/                 # productor: de dónde salen las imágenes
+        │   ├── fuente.py            #   la interfaz común (Cuadro, FuenteImagen)
+        │   ├── camara.py            #   webcam USB real
+        │   └── generador_sintetico.py   # imágenes de prueba con verdad conocida
+        │
         ├── geometry/                # productor: píxeles → celdas
-        ├── detectors/               # productor: qué hay y dónde
-        ├── tracking/                # productor: identidad y oclusión
-        ├── publish/                 # consumidor: a la red
-        ├── record/                  # consumidor: a disco
-        └── tools/                   # herramientas de puesta a punto
+        │   ├── distorsion.py        #   corrección del lente + perfiles de cámara
+        │   └── coordenadas.py       #   sistema de coordenadas por marcadores
+        │
+        ├── detectors/               # productor: qué hay y dónde        (vacío)
+        ├── tracking/                # productor: identidad y oclusión   (vacío)
+        ├── publish/                 # consumidor: a la red              (vacío)
+        ├── record/                  # consumidor: a disco               (vacío)
+        │
+        ├── tools/                   # herramientas de puesta a punto
+        │   ├── diagnostico_camara.py    # ¿la cámara sirve?
+        │   ├── patron_calibracion.py    # genera los PDF para imprimir
+        │   ├── calibrar_camara.py       # mide la distorsión del lente
+        │   ├── precision_ubicacion.py   # ¿ubica con error aceptable?
+        │   ├── verificar_geometria.py   # coordenadas contra verdad conocida
+        │   └── panel.py                 # el panel que dibujan las demás
+        │
+        ├── calibraciones/           # DATOS: un perfil por cámara calibrada
+        └── mediciones/              # DATOS: una sesión por prueba de precisión
 ```
 
 Cada subcarpeta de `vision/` tiene su propio `README.md` que dice qué hay hoy y
 qué está planificado.
+
+**`calibraciones/` y `mediciones/` no son código ni configuración del sistema:**
+son el resultado de medir **aparatos concretos**. Un perfil de calibración
+describe un lente; una sesión de precisión describe cómo se portó una cámara
+sobre una cancha. Por eso viven aparte de `config_vision.json`, que describe el
+sistema y no los aparatos.
 
 ---
 
@@ -296,9 +357,13 @@ Para traducir, el sistema usa **cuatro marcadores ArUco** pegados en las esquina
 de la cancha. Al verlos en la imagen, sabe exactamente cómo está mirando el
 tablero y puede convertir cualquier píxel a su celda.
 
-La ventaja escondida: **si alguien mueve la cámara, el sistema se recalibra
-solo** en el cuadro siguiente. Los marcadores no se movieron, así que las
-coordenadas siguen significando lo mismo.
+La ventaja escondida: **si alguien mueve la cámara, el sistema se reancla solo**
+en el cuadro siguiente. Los marcadores no se movieron, así que las coordenadas
+siguen significando lo mismo.
+
+> No confundir esto con la **calibración de distorsión**, que es otra cosa y no
+> hay que rehacerla: describe el **lente**, no dónde está puesta la cámara. Se
+> mide una vez por aparato y sigue valiendo aunque la cámara se mueva.
 
 Se usa el **centro** de cada marcador —no una esquina— porque es lo único que se
 puede medir sin ambigüedad, tanto en una imagen como con una cinta métrica sobre
@@ -466,8 +531,8 @@ python3.12 -m venv .venv
 .venv/bin/python -m pip install -r vision/requirements.txt
 ```
 
-Eso instala OpenCV y NumPy en un entorno aislado, sin tocar el Python del
-sistema. La carpeta `.venv/` está ignorada por git.
+Eso instala OpenCV, NumPy y Pillow en un entorno aislado, sin tocar el Python
+del sistema. La carpeta `.venv/` está ignorada por git.
 
 ### Probar el simulador del contrato
 
@@ -504,6 +569,39 @@ Para ver la imagen que generó:
 .venv/bin/python -m vision.tools.verificar_geometria --salida /tmp/tablero.png --anotar
 ```
 
+### Poner a punto una cámara real
+
+Estas cuatro herramientas trabajan con hardware. El orden **no es arbitrario**:
+cada una supone que la anterior salió bien.
+
+```bash
+# 1. ¿La cámara sirve? fps reales, qué ajustes aceptó, si ve los 4 marcadores.
+.venv/bin/python -m vision.tools.diagnostico_camara
+.venv/bin/python -m vision.tools.diagnostico_camara --listar   # ¿qué cámaras hay?
+
+# 2. Imprimir el patrón de calibración, AL 100 %, y verificarlo con su regla.
+.venv/bin/python -m vision.tools.patron_calibracion --salida patron.pdf
+
+# 3. Medir la distorsión del lente. El nombre define a qué perfil va: cada
+#    cámara guarda el suyo, así calibrar una no pisa la calibración de otra.
+.venv/bin/python -m vision.tools.calibrar_camara --camara "Logitech C270"
+.venv/bin/python -m vision.tools.calibrar_camara --verificar   # mirarlo con los ojos
+
+# 4. ¿Ubica con error aceptable? Se mide sobre el tablero real, con un marcador
+#    de prueba que también hay que imprimir.
+.venv/bin/python -m vision.tools.patron_calibracion --marcador-prueba 20
+.venv/bin/python -m vision.tools.precision_ubicacion --camara "Logitech C270"
+.venv/bin/python -m vision.tools.precision_ubicacion --comparar   # tabla de cámaras
+```
+
+El detalle de cada una —qué patrón elegir, cómo leer el semáforo del error, qué
+hacer cuando avisa que el perfil no corresponde a la cámara— está en
+[`vision/tools/README.md`](vision/tools/README.md).
+
+> **Antes de la número 4 la cancha tiene que estar montada**, porque la
+> precisión se mide sobre la cuadrícula real y necesita ver los cuatro
+> marcadores de esquina. Ver [`MONTAJE.md`](MONTAJE.md).
+
 ---
 
 ## 9. Estado actual del proyecto
@@ -518,16 +616,29 @@ va engrosando. Así siempre hay algo que funciona y se puede verificar.
 |---|---|
 | **El contrato** (`contrato/`) | Formato definido, validador, simulador con patologías reales, cliente de referencia y manual completo. Protocolo **v1**. |
 | **Generador sintético** (`vision/sources/`) | Crea imágenes del tablero con marcadores y rovers, **conociendo la verdad** de lo que dibujó. |
-| **Geometría de esquinas** (`vision/geometry/`) | Detecta los 4 marcadores y convierte píxeles a celdas. Verificado con y sin inclinación de cámara: error máximo de **0,2 mm**. |
-| **Verificación** (`vision/tools/`) | Compara lo detectado contra la verdad conocida. |
+| **Captura real** (`vision/sources/`) | Lee la webcam USB en un hilo propio que **nunca bloquea**, con exposición, enfoque y balance de blancos fijos —y **verificados por efecto**, porque muchas cámaras aceptan el ajuste y siguen haciendo lo que quieren—. Incluye un menú para elegir qué cámara abrir. |
+| **Geometría de esquinas** (`vision/geometry/`) | Detecta los 4 marcadores y convierte píxeles a celdas. Verificado contra la verdad del generador sintético: exacto con la cámara cenital y **0,44 mm** de error máximo con la cámara inclinada. |
+| **Calibración de distorsión** (`vision/geometry/`) | Corrige la curvatura del lente gran angular. **Dos cámaras ya calibradas y verificadas**: ArgomTech CAM40 (1920×1080, 0,314 px) y Logitech C270 (1280×720, 0,206 px). |
+| **Perfiles por cámara** (`vision/geometry/`) | Cada aparato guarda su propia calibración, y el sistema **avisa cuando el perfil no le corresponde** a la cámara conectada, en vez de corregir mal en silencio. |
+| **Herramientas de puesta a punto** (`vision/tools/`) | Seis: diagnóstico de cámara, generación de los PDF para imprimir, calibración, verificación visual, verificación de geometría y medición de precisión. |
+
+**Precisión medida sobre hardware real.** El criterio era **error máximo por
+debajo de 10 mm** —un cubo mide 60 mm, así que 10 mm mantiene el objetivo dentro
+del cubo—. Las dos cámaras quedaron muy por debajo:
+
+| Cámara | Resolución | Error máximo | Error medio |
+|---|---|---|---|
+| Logitech C270 | 1280×720 | **1,01 mm** | 0,47 mm |
+| ArgomTech CAM40 | 1920×1080 | **1,58 mm** | 0,75 mm |
+
+La consecuencia práctica es que **la resolución no es el factor limitante**: 720p
+ubica bien, así que la cámara se puede elegir por disponibilidad y precio.
 
 ### Todavía no existe
 
 | Pieza | Qué falta |
 |---|---|
-| **Captura real** (`sources/`) | Leer de la webcam USB con ajustes fijos. Hoy solo hay imágenes sintéticas. |
-| **Calibración de distorsión** (`geometry/`) | El lente gran angular curva las líneas rectas y hay que corregirlo. |
-| **Corrección de paralaje** (`geometry/`) | Los objetos altos se ven corridos hacia afuera; hay que compensarlo con la altura conocida. |
+| **Corrección de paralaje** (`geometry/`) | Los objetos altos se ven corridos hacia afuera; hay que compensarlo con la altura conocida. Ya se sabe **cuánto pesa** —la herramienta de precisión lo mide y lo descuenta—, pero todavía no es una etapa del flujo. |
 | **Detección de rovers** (`detectors/`) | Encontrar los rovers por su marcador y deducir su orientación. |
 | **Detección de color** (`detectors/`) | Cubos y obstáculos por color, segmentando por saturación. |
 | **Seguimiento** (`tracking/`) | Identidad entre cuadros, oclusión y edad. |

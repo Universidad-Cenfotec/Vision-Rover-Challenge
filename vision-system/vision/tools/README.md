@@ -38,7 +38,16 @@ python -m vision.tools.diagnostico_camara --listar   # ¿qué cámaras responden
 python -m vision.tools.diagnostico_camara --indice 1 # elegir otra cámara
 python -m vision.tools.diagnostico_camara --sintetico    # sin cámara
 python -m vision.tools.diagnostico_camara --sin-ventana  # sin pantalla
+python -m vision.tools.diagnostico_camara --segundos 10  # cerrar solo a los 10 s
+python -m vision.tools.diagnostico_camara --sin-efecto   # saltear la prueba de ajustes
 ```
+
+Si no se pasa `--indice`, respeta lo que diga `camara.indice` en la
+configuración, que además del número acepta `"menu"` para elegir de una lista.
+Ver [`../sources/README.md`](../sources/README.md).
+
+La información en pantalla la dibuja [`panel.py`](#panelpy), que es lo que
+permite que diga "exposición" y no "exposici??n".
 
 Al cerrar imprime un resumen en lenguaje claro con lo que encontró y qué hacer
 si falta algo. Reusa la detección de marcadores de
@@ -57,6 +66,7 @@ Genera en PDF, **a tamaño real**, el ajedrezado que necesita la calibración.
 ```bash
 python -m vision.tools.patron_calibracion --salida patron.pdf
 python -m vision.tools.patron_calibracion --columnas 9 --filas 6    # version de una hoja
+python -m vision.tools.patron_calibracion --marcador-prueba 20      # el marcador de precisión
 ```
 
 **Qué patrón elegir.** Con cuadros de 25 mm sobre papel Carta horizontal:
@@ -91,9 +101,17 @@ sale bajo igual.
 Mide la distorsión del lente y la deja guardada como perfil de cámara.
 
 ```bash
-python -m vision.tools.calibrar_camara              # capturar y calibrar
-python -m vision.tools.calibrar_camara --verificar  # ver el antes y después
+python -m vision.tools.calibrar_camara --camara "Logitech C270"   # capturar y calibrar
+python -m vision.tools.calibrar_camara --verificar                # ver el antes y después
 ```
+
+**`--camara NOMBRE` es lo que decide a qué archivo va el perfil.** La distorsión
+es del aparato, no del sistema: cada cámara tiene el suyo en
+`vision/calibraciones/`, y el nombre que se pase acá es el que lo bautiza
+(`"Logitech C270"` → `logitech_c270.json`). Si se omite, la herramienta lo
+pregunta. Sin esto, calibrar una segunda cámara pisaría el perfil de la primera.
+El detalle de cómo se elige después está en
+[`../geometry/README.md`](../geometry/README.md).
 
 **Captura guiada, no "sacá 15 fotos".** Lleva la cuenta de **zonas del cuadro,
 distancias e inclinaciones**, y captura sola cuando el patrón está quieto y
@@ -119,6 +137,114 @@ de las filas: 4,89 px → 0,001 px"*.
 Esa comprobación visual existe porque el error de reproyección **puede mentir**:
 con el patrón mal impreso el ajuste es coherente consigo mismo y el número sale
 bajo igual. Mirar algo que uno sabe que es recto comprueba lo que el número no.
+
+Cuando el perfil cargado **no le corresponde** a la cámara conectada, avisa en
+pantalla. Ver [`../geometry/README.md`](../geometry/README.md).
+
+### `precision_ubicacion.py`
+
+Responde con un número la pregunta que decide la compra: **¿esta cámara ubica
+los objetos con error aceptable?**
+
+```bash
+python -m vision.tools.precision_ubicacion --camara "Logitech C270"
+python -m vision.tools.precision_ubicacion --comparar       # tabla de cámaras medidas
+```
+
+**Criterio: error máximo por debajo de 1 cm** en toda la cancha. No es
+arbitrario: un cubo mide 6 cm, así que 1 cm de error mantiene el objetivo dentro
+del cubo.
+
+**Mide una DISTANCIA, no una posición.** Se apoya el marcador de prueba en un
+punto A, se lo corre un número exacto de cuadros y se lo captura en B. Dos
+motivos, y el segundo es el decisivo:
+
+1. Medir una posición absoluta exigiría ubicar el origen —el centro del marcador
+   ID 0— con precisión, y eso reintroduce el error manual que se quiere evitar.
+   Un desplazamiento no necesita saber dónde está el origen: se cancela al restar.
+2. **Neutraliza el paralaje por construcción.** Un objeto de altura `h` a
+   distancia `d` del punto bajo la cámara se ve corrido a `d · H/(H−h)`: una
+   multiplicación alrededor de ese punto. Las dos posiciones se escalan por el
+   **mismo** factor, así que al restarlas el paralaje queda como un **error de
+   escala puro**, calculable y descontable, en vez de un corrimiento que varía
+   con la posición y sería inseparable del error de la cámara.
+
+> Por eso esta prueba se salva de necesitar la corrección de paralaje. El
+> sistema real **sí la necesita**, porque publica posiciones absolutas.
+
+**La cuadrícula del tablero es la regla.** Cada cuadro mide exactamente 20 mm, así
+que contar cuadros da una distancia exacta, sin lectura que interpretar. El único
+error humano que queda es alinear el marcador a las líneas.
+
+**Se mide sobre puntos internos**, nunca sobre los marcadores de esquina: esos
+son los que el sistema usa para definir sus coordenadas, así que medir ahí sería
+corregir con las propias respuestas —darían cero por construcción y no probarían
+nada—. Recorre **cinco zonas** (centro y las cuatro esquinas de la cancha útil),
+en horizontal y vertical.
+
+Todo lo demás sale de `config_vision.json`, sección `precision`: el umbral, el ID
+y tamaño del marcador de prueba, cuántos cuadros mover, cuántas muestras
+promediar por punto, la altura de la cámara y el margen mínimo a los marcadores.
+
+**El marcador de prueba** se imprime con
+`patron_calibracion --marcador-prueba 20`, y va apoyado **plano** sobre el
+tablero. Su altura entra en la configuración (`altura_marcador_mm`) porque de
+ella sale el factor de paralaje que se descuenta.
+
+#### `--comparar`: una fila por cámara
+
+```
+  cámara                 resolución    err. máx   err. med     ruido  veredicto
+  ArgomTech CAM40        1920x1080      1.58 mm    0.75 mm   0.16 mm  SIRVE
+  Logitech C270          1280x720       1.01 mm    0.47 mm   0.17 mm  SIRVE
+```
+
+Muestra la **última medición válida** de cada cámara, **no la mejor**: quedarse
+con la mejor escondería una cámara que falla seguido. Las anteriores no se
+borran; se ven con `--historial`.
+
+Cada sesión guarda en `vision/mediciones/` **con qué cancha se midió**. Eso
+permite marcar una sesión como obsoleta **por causa y no por antigüedad**: si
+mañana se remonta la cancha con otras medidas, las mediciones viejas quedan
+marcadas solas, sin depender de que alguien recuerde cuándo fue el cambio. Una
+sesión sin ese dato dice *"cancha no registrada"* y **sigue contando**: no saber
+con qué cancha se midió no es lo mismo que saber que está mal.
+
+**Resultado sobre hardware real:** las dos cámaras medidas quedan muy por debajo
+del criterio de 10 mm, así que la elección se puede hacer por disponibilidad y
+precio y no por precisión.
+
+### `panel.py`
+
+El panel de información que las herramientas dibujan sobre el video. No es una
+herramienta en sí: lo usan `diagnostico_camara`, `calibrar_camara` y
+`precision_ubicacion`.
+
+**Existe por los acentos.** `cv2.putText` usa las fuentes Hershey, que son ASCII
+puro: escriben "exposición" como "exposici??n" **sin avisar**. El camino nativo
+sería `cv2.freetype`, que no viene compilado en la rueda de
+`opencv-contrib-python`. Por eso el panel dibuja con **Pillow**, que sí tiene
+fuentes TrueType del sistema.
+
+**Pillow es opcional.** Si no está instalado, el panel cae a `cv2.putText`
+transliterando los acentos: se lee peor, pero la herramienta no se rompe.
+
+Otras dos cosas que resuelve:
+
+- **La tipografía se carga una vez** (`Tipografia`). El panel se dibuja en cada
+  cuadro; abrir la fuente cada vez costaría más que dibujar y el visor perdería
+  cuadros.
+- **Se escala con la resolución** (`escala_para`). Un panel pensado para 1080p es
+  ilegible a 480p y ridículo a 4K.
+
+El estado se comunica **por color antes que por texto** —verde bien, rojo
+problema, ámbar no se pudo determinar—: en una herramienta que se mira de reojo
+mientras uno mueve la cámara, el color se lee de un vistazo y la palabra
+después.
+
+> La paleta de `panel.py` va en **RGB** (es lo que espera Pillow); lo que se
+> dibuja con OpenCV directamente sobre el video va en **BGR**. Son espacios
+> distintos y mezclarlos pinta los avisos de un color equivocado.
 
 ## Lo que todavía NO existe
 
