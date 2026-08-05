@@ -332,6 +332,16 @@ def guardar_sesion(mediciones, perfil, cfg, ancho, alto, ruta) -> None:
         "camara": perfil.camara,
         "perfil": perfil.nombre,
         "resolucion": {"ancho": ancho, "alto": alto},
+        # La cancha con la que se midió. Se guarda para poder detectar por CAUSA
+        # —y no por antigüedad— que una sesión ya no vale: si mañana se remonta
+        # la cancha con otras medidas, todas las mediciones anteriores quedan
+        # marcadas solas como obsoletas, sin depender de que alguien recuerde
+        # cuándo fue el cambio.
+        "cancha": {
+            "cols": cfg.tablero.cols,
+            "rows": cfg.tablero.rows,
+            "cell_mm": cfg.tablero.cell_mm,
+        },
         "umbral_mm": cfg.precision.umbral_mm,
         "altura_camara_mm": cfg.precision.altura_camara_mm,
         "altura_marcador_mm": cfg.precision.altura_marcador_mm,
@@ -348,30 +358,145 @@ def guardar_sesion(mediciones, perfil, cfg, ancho, alto, ruta) -> None:
         f.write("\n")
 
 
-def modo_comparar(cfg) -> int:
-    """Pone lado a lado las sesiones guardadas, para decidir entre cámaras."""
-    carpeta = os.path.join(BASE_VISION, cfg.precision.carpeta_mediciones)
-    archivos = sorted(glob.glob(os.path.join(carpeta, "*.json")))
-    if not archivos:
+def _cargar_sesiones(carpeta: str) -> list[dict]:
+    """Lee todas las sesiones guardadas. Ignora las ilegibles."""
+    sesiones = []
+    for ruta in glob.glob(os.path.join(carpeta, "*.json")):
+        try:
+            d = json.load(open(ruta, encoding="utf-8"))
+            d["_archivo"] = os.path.basename(ruta)
+            sesiones.append(d)
+        except Exception:  # noqa: BLE001 — un archivo roto no invalida los demás
+            continue
+    return sesiones
+
+
+def motivo_obsoleta(sesion: dict, cfg) -> str | None:
+    """Por qué esta sesión ya no vale, o `None` si sigue vigente.
+
+    Detecta obsolescencia **por causa y no por antigüedad**: una medición hecha
+    con otra cancha es inválida de forma demostrable, sin que haga falta recordar
+    cuándo se cambió la configuración. Es más fuerte que ordenar por fecha,
+    porque no depende del criterio de nadie.
+
+    Ojo con el alcance: esto atrapa las mediciones hechas con otra cancha, pero
+    **no** las mal hechas con la cancha correcta —un conteo de cuadros
+    equivocado deja una sesión indistinguible de una buena—. Para esas la única
+    regla posible es quedarse con la más reciente.
+
+    Una sesión SIN el campo de cancha **no se declara obsoleta**: no se sabe con
+    qué cancha se midió, y "no lo sé" no es "está mal". Declararla obsoleta
+    sería inventar un dato, y descartaría mediciones válidas por el solo hecho
+    de ser anteriores a que se empezara a registrar la cancha. Esas quedan
+    marcadas como "cancha no registrada" y las ordena la regla de fecha.
+    """
+    cancha = sesion.get("cancha")
+    if cancha is None:
+        return None
+    actual = (cfg.tablero.cols, cfg.tablero.rows, float(cfg.tablero.cell_mm))
+    suya = (cancha.get("cols"), cancha.get("rows"), float(cancha.get("cell_mm", 0)))
+    if suya != actual:
+        return "medida con cancha {}x{}".format(cancha.get("cols"), cancha.get("rows"))
+    return None
+
+
+def texto_cancha(sesion: dict) -> str:
+    """Cómo se muestra la cancha de una sesión, incluido el caso de no saberla."""
+    cancha = sesion.get("cancha")
+    if cancha is None:
+        return "cancha no registrada"
+    return "cancha {}x{}".format(cancha.get("cols"), cancha.get("rows"))
+
+
+def _por_camara(sesiones: list[dict]) -> dict[str, list[dict]]:
+    """Agrupa por cámara y ordena de la más reciente a la más vieja."""
+    grupos: dict[str, list[dict]] = {}
+    for s in sesiones:
+        grupos.setdefault(s.get("camara", "?"), []).append(s)
+    for lista in grupos.values():
+        lista.sort(key=lambda s: (s.get("fecha", ""), s.get("_archivo", "")), reverse=True)
+    return grupos
+
+
+def modo_comparar(cfg, historial: bool = False) -> int:
+    """Una fila por cámara, para poder decidir de un vistazo.
+
+    Por qué se muestra **la más reciente** y no la mejor
+    ---------------------------------------------------
+    Quedarse con el mejor resultado de cada cámara sería elegir la medición que
+    nos gusta: una cámara que acierta una vez de seis aparecería como buena, y la
+    tabla escondería que en general no anda.
+
+    La más reciente refleja el montaje y el procedimiento actuales, y tiene una
+    propiedad valiosa: si la última medición sale mal, la tabla lo muestra en vez
+    de taparlo con un buen resultado viejo.
+
+    Ninguna sesión se borra ni se mueve: solo cambia qué se muestra por defecto.
+    """
+    pr = cfg.precision
+    carpeta = os.path.join(BASE_VISION, pr.carpeta_mediciones)
+    sesiones = _cargar_sesiones(carpeta)
+    if not sesiones:
         print("No hay mediciones guardadas en {}".format(carpeta))
         return 1
-    print("=" * 82)
-    print("COMPARACIÓN DE CÁMARAS  —  criterio: error máximo < {:.1f} mm".format(
-        cfg.precision.umbral_mm))
-    print("=" * 82)
-    print("  {:<22} {:<11} {:>9} {:>9} {:>9} {:>8}".format(
-        "cámara", "resolución", "err. máx", "err. med", "ruido", "veredicto"))
-    print("  " + "-" * 74)
-    for a in archivos:
-        try:
-            d = json.load(open(a, encoding="utf-8"))
-        except Exception:  # noqa: BLE001
+
+    grupos = _por_camara(sesiones)
+
+    if historial:
+        print("=" * 82)
+        print("HISTORIAL COMPLETO DE MEDICIONES")
+        print("=" * 82)
+        for camara in sorted(grupos):
+            print("\n  {}".format(camara))
+            vigente_marcada = False
+            for s in grupos[camara]:
+                motivo = motivo_obsoleta(s, cfg)
+                marca = ""
+                if motivo:
+                    marca = "  ⚠ OBSOLETA: {}".format(motivo)
+                elif not vigente_marcada:
+                    marca = "  ← VIGENTE"
+                    vigente_marcada = True
+                print("    {:<16} {:>9.2f} mm  {:<8} {:<22}{}".format(
+                    s.get("fecha", "?"), s.get("error_maximo_mm", 0.0),
+                    "SIRVE" if s.get("sirve") else "no", texto_cancha(s), marca))
+        print("\n" + "=" * 82)
+        return 0
+
+    print("=" * 88)
+    print("COMPARACIÓN DE CÁMARAS  —  criterio: error máximo < {:.1f} mm".format(pr.umbral_mm))
+    print("=" * 88)
+    print("  {:<22} {:<11} {:>10} {:>10} {:>9}  {:<10} {}".format(
+        "cámara", "resolución", "err. máx", "err. med", "ruido", "veredicto", "medido"))
+    print("  " + "-" * 84)
+
+    ocultas = 0
+    for camara in sorted(grupos):
+        lista = grupos[camara]
+        validas = [s for s in lista if motivo_obsoleta(s, cfg) is None]
+        ocultas += len(lista) - (1 if validas else 0)
+        if not validas:
+            # La cámara NO desaparece: mostrarla vacía sería peor que decir que
+            # hay que remedirla.
+            motivo = motivo_obsoleta(lista[0], cfg)
+            print("  {:<22} {:<11} {:>10} {:>10} {:>9}  {:<10} {}".format(
+                camara[:22], "—", "—", "—", "—", "REMEDIR",
+                "solo mediciones obsoletas: {}".format(motivo)))
             continue
-        print("  {:<22} {:<11} {:>7.2f}mm {:>7.2f}mm {:>7.2f}mm {:>8}".format(
-            d["camara"][:22], "{}x{}".format(d["resolucion"]["ancho"], d["resolucion"]["alto"]),
-            d["error_maximo_mm"], d["error_medio_mm"], d.get("ruido_medio_mm", 0.0),
-            "SIRVE" if d["sirve"] else "NO"))
-    print("  " + "-" * 74)
+        s = validas[0]
+        print("  {:<22} {:<11} {:>7.2f} mm {:>7.2f} mm {:>6.2f} mm  {:<10} {}".format(
+            camara[:22],
+            "{}x{}".format(s["resolucion"]["ancho"], s["resolucion"]["alto"]),
+            s["error_maximo_mm"], s["error_medio_mm"], s.get("ruido_medio_mm", 0.0),
+            "SIRVE" if s["sirve"] else "NO ALCANZA",
+            s.get("fecha", "?") + ("" if s.get("cancha") else "  (cancha no registrada)")))
+
+    print("  " + "-" * 84)
+    print("  Se muestra la ÚLTIMA medición válida de cada cámara, no la mejor:")
+    print("  quedarse con la mejor escondería una cámara que falla seguido.")
+    if ocultas:
+        print("  {} sesión(es) anterior(es) oculta(s) — nada se borró.".format(ocultas))
+        print("  Para verlas: python -m vision.tools.precision_ubicacion --comparar --historial")
     return 0
 
 
@@ -390,7 +515,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cuadros", type=int, default=None,
                         help="cuántos cuadros de la cuadrícula mover en cada medición")
     parser.add_argument("--comparar", action="store_true",
-                        help="mostrar las sesiones ya medidas y salir")
+                        help="mostrar una fila por cámara con su última medición válida, y salir")
+    parser.add_argument("--historial", action="store_true",
+                        help="con --comparar: mostrar TODAS las sesiones, marcando las obsoletas")
     args = parser.parse_args(argv)
 
     cfg = cargar_config(args.config)
@@ -399,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
     cuadros = args.cuadros or pr.cuadros_por_medicion
 
     if args.comparar:
-        return modo_comparar(cfg)
+        return modo_comparar(cfg, historial=args.historial)
 
     print("=" * 78)
     print("PRECISIÓN DE UBICACIÓN")

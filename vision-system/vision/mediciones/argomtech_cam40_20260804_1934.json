@@ -1,0 +1,138 @@
+{
+  "fecha": "2026-08-04 19:34",
+  "camara": "ArgomTech CAM40",
+  "perfil": "argomtech_cam40",
+  "resolucion": {
+    "ancho": 1920,
+    "alto": 1080
+  },
+  "umbral_mm": 10.0,
+  "altura_camara_mm": 1300.0,
+  "altura_marcador_mm": 0.2,
+  "error_maximo_mm": 1.582,
+  "error_medio_mm": 0.749,
+  "ruido_medio_mm": 0.157,
+  "sirve": true,
+  "mediciones": [
+    {
+      "zona": "centro",
+      "direccion": "horizontal",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 200.488,
+      "distancia_sin_paralaje_mm": 200.457,
+      "aporte_paralaje_mm": 0.031,
+      "error_mm": 0.457,
+      "error_relativo_pct": 0.2287,
+      "ruido_mm": 0.122
+    },
+    {
+      "zona": "centro",
+      "direccion": "vertical",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 201.613,
+      "distancia_sin_paralaje_mm": 201.582,
+      "aporte_paralaje_mm": 0.031,
+      "error_mm": 1.582,
+      "error_relativo_pct": 0.791,
+      "ruido_mm": 0.119
+    },
+    {
+      "zona": "superior-izquierda",
+      "direccion": "horizontal",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 201.439,
+      "distancia_sin_paralaje_mm": 201.408,
+      "aporte_paralaje_mm": 0.031,
+      "error_mm": 1.408,
+      "error_relativo_pct": 0.7038,
+      "ruido_mm": 0.286
+    },
+    {
+      "zona": "superior-izquierda",
+      "direccion": "vertical",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 199.803,
+      "distancia_sin_paralaje_mm": 199.772,
+      "aporte_paralaje_mm": 0.031,
+      "error_mm": 0.228,
+      "error_relativo_pct": 0.114,
+      "ruido_mm": 0.171
+    },
+    {
+      "zona": "superior-derecha",
+      "direccion": "horizontal",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 200.354,
+      "distancia_sin_paralaje_mm": 200.323,
+      "aporte_paralaje_mm": 0.031,
+      "error_mm": 0.323,
+      "error_relativo_pct": 0.1616,
+      "ruido_mm": 0.112
+    },
+    {
+      "zona": "superior-derecha",
+      "direccion": "vertical",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 200.768,
+      "distancia_sin_paralaje_mm": 200.737,
+      "aporte_paralaje_mm": 0.031,
+      "error_mm": 0.737,
+      "error_relativo_pct": 0.3686,
+      "ruido_mm": 0.146
+    },
+    {
+      "zona": "inferior-derecha",
+      "direccion": "horizontal",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 199.616,
+      "distancia_sin_paralaje_mm": 199.585,
+      "aporte_paralaje_mm": 0.031,
+      "error_mm": 0.415,
+      "error_relativo_pct": 0.2075,
+      "ruido_mm": 0.218
+    },
+    {
+      "zona": "inferior-derecha",
+      "direccion": "vertical",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 199.797,
+      "distancia_sin_paralaje_mm": 199.766,
+      "aporte_paralaje_mm": 0.031,
+      "error_mm": 0.234,
+      "error_relativo_pct": 0.1169,
+      "ruido_mm": 0.13
+    },
+    {
+      "zona": "inferior-izquierda",
+      "direccion": "horizontal",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 201.597,
+      "distancia_sin_paralaje_mm": 201.566,
+      "aporte_paralaje_mm": 0.031,
+      "error_mm": 1.566,
+      "error_relativo_pct": 0.7831,
+      "ruido_mm": 0.094
+    },
+    {
+      "zona": "inferior-izquierda",
+      "direccion": "vertical",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 199.495,
+      "distancia_sin_paralaje_mm": 199.464,
+      "aporte_paralaje_mm": 0.031,
+      "error_mm": 0.536,
+      "error_relativo_pct": 0.2678,
+      "ruido_mm": 0.171
+    }
+  ]
+}

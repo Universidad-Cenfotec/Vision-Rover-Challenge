@@ -6,6 +6,12 @@
     "ancho": 1280,
     "alto": 720
   },
+  "cancha": {
+    "cols": 50,
+    "rows": 50,
+    "cell_mm": 20.0
+  },
+  "_nota": "Cancha de 50x50 registrada a posteriori: es un hecho conocido, no una inferencia. Esta sesión se hizo ANTES de descubrir que la cancha real es de 43x43, y sus 33,92 mm de error son justamente el 16,5 % de escala que la herramienta detectó. Se conserva como registro de ese hallazgo.",
   "umbral_mm": 10.0,
   "altura_camara_mm": 1300.0,
   "altura_marcador_mm": 0.2,
