@@ -43,7 +43,6 @@ try:  # como paquete
         elegir_perfil,
         guardar_perfil,
         nombre_archivo,
-        perfiles_disponibles,
     )
     from ..sources.camara import ErrorCamara, FuenteCamara
     from .panel import AMBAR, BLANCO, GRIS, Panel, Tipografia, escala_para
@@ -52,7 +51,7 @@ except ImportError:  # como script suelto
     from vision.configuracion import CONFIG_POR_DEFECTO, cargar_config  # type: ignore[no-redef]
     from vision.geometry.distorsion import (  # type: ignore[no-redef]
         ErrorCalibracion, PerfilCamara, Rectificador, comparar_con_camara, elegir_perfil,
-        guardar_perfil, nombre_archivo, perfiles_disponibles,
+        guardar_perfil, nombre_archivo,
     )
     from vision.sources.camara import ErrorCamara, FuenteCamara  # type: ignore[no-redef]
     from vision.tools.panel import (  # type: ignore[no-redef]

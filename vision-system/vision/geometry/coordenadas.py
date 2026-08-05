@@ -84,10 +84,6 @@ class SistemaCoordenadas:
         p = self.a_celdas(np.array([[x, y]], dtype=np.float64))
         return (float(p[0, 0]), float(p[0, 1]))
 
-    def celdas_a_mm(self, celdas: float) -> float:
-        """Pasa una distancia en celdas a milímetros."""
-        return celdas * self.cell_mm
-
 
 def _aplicar(h: np.ndarray, puntos: np.ndarray) -> np.ndarray:
     puntos = np.asarray(puntos, dtype=np.float64).reshape(-1, 1, 2)

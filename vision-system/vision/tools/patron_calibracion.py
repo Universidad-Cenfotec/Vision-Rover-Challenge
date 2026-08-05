@@ -125,7 +125,9 @@ class _PDF:
         ids_pagina = [3 + i * 2 for i in range(num_paginas)]
         id_fuente = 3 + num_paginas * 2
 
-        objetos.append(b"<< /Type /Catalog /Pages 2 0 R >>")
+        objetos.append(
+            "<< /Type /Catalog /Pages {} 0 R >>".format(id_paginas).encode("ascii")
+        )
         objetos.append(
             "<< /Type /Pages /Kids [{}] /Count {} >>".format(
                 " ".join("{} 0 R".format(i) for i in ids_pagina), num_paginas
@@ -134,9 +136,9 @@ class _PDF:
         for i, contenido in enumerate(self._paginas):
             id_pag = ids_pagina[i]
             objetos.append(
-                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.4f} {:.4f}] "
+                "<< /Type /Page /Parent {} 0 R /MediaBox [0 0 {:.4f} {:.4f}] "
                 "/Resources << /Font << /F1 {} 0 R >> >> /Contents {} 0 R >>".format(
-                    self.ancho, self.alto, id_fuente, id_pag + 1
+                    id_paginas, self.ancho, self.alto, id_fuente, id_pag + 1
                 ).encode("ascii")
             )
             objetos.append(

@@ -41,7 +41,7 @@ try:  # como paquete
         verificar_por_efecto,
     )
     from ..sources.generador_sintetico import FuenteSintetica
-    from .panel import AMBAR, BLANCO, GRIS, ROJO, VERDE, Panel, Tipografia, escala_para
+    from .panel import AMBAR, GRIS, ROJO, VERDE, Panel, Tipografia, escala_para
 except ImportError:  # como script suelto
     from vision.configuracion import cargar_config  # type: ignore[no-redef]
     from vision.geometry.coordenadas import centro_de, detectar_marcadores  # type: ignore[no-redef]
@@ -53,7 +53,7 @@ except ImportError:  # como script suelto
     )
     from vision.sources.generador_sintetico import FuenteSintetica  # type: ignore[no-redef]
     from vision.tools.panel import (  # type: ignore[no-redef]
-        AMBAR, BLANCO, GRIS, ROJO, VERDE, Panel, Tipografia, escala_para,
+        AMBAR, GRIS, ROJO, VERDE, Panel, Tipografia, escala_para,
     )
 
 # Colores en BGR para lo que se dibuja con OpenCV directamente sobre el video

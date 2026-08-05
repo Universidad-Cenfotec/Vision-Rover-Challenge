@@ -58,6 +58,7 @@ try:  # como paquete: python -m contrato.mock_publisher
         Obstacle,
         Rover,
         Start,
+        ahora_ms,
         codificar_ndjson,
     )
 except ImportError:  # como script suelto: python contrato/mock_publisher.py
@@ -71,21 +72,12 @@ except ImportError:  # como script suelto: python contrato/mock_publisher.py
         Obstacle,
         Rover,
         Start,
+        ahora_ms,
         codificar_ndjson,
     )
 
 
 CONFIG_POR_DEFECTO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config_simulador.json")
-
-
-def ahora_ms() -> int:
-    """Reloj de pared en milisegundos desde época.
-
-    Es de pared y no monótono a propósito: el cliente mide latencia como
-    `ahora - ts_ms`, y para eso ambos extremos tienen que hablar del mismo
-    origen de tiempo.
-    """
-    return int(time.time() * 1000.0)
 
 
 # --------------------------------------------------------------------------

@@ -38,7 +38,6 @@ import json
 import math
 import os
 import re
-import sys
 import unicodedata
 from dataclasses import dataclass
 
@@ -235,10 +234,6 @@ class Compatibilidad:
     perfil_dice: str
     camara_dice: str
     sugerencia: str
-
-    @property
-    def hay_problema(self) -> bool:
-        return self.nivel != "compatible"
 
     @property
     def etiqueta(self) -> str:
@@ -562,15 +557,3 @@ class FuenteRectificada:
 
     def __exit__(self, *_) -> None:
         self.cerrar()
-
-
-def rectificador_desde_config(cfg, base_vision: str, tamano: tuple[int, int] | None = None):
-    """Atajo: carga el perfil que indica la configuración y arma el rectificador.
-
-    Devuelve `None` si todavía no hay calibración, para que quien lo use pueda
-    seguir trabajando sin corrección en vez de quedar bloqueado.
-    """
-    ruta = cfg.calibracion.ruta_perfil(base_vision)
-    if not os.path.exists(ruta):
-        return None
-    return Rectificador(cargar_perfil(ruta), alpha=cfg.calibracion.alpha, tamano=tamano)

@@ -25,13 +25,11 @@ from collections.abc import Iterator
 from typing import Any
 
 try:  # como paquete: python -m contrato.test_client
-    from .schema import decodificar_ndjson, validate_message
+    from .schema import ahora_ms, decodificar_ndjson, validate_message
 except ImportError:  # como script suelto: python contrato/test_client.py
-    from schema import decodificar_ndjson, validate_message  # type: ignore[no-redef]
-
-
-def ahora_ms() -> int:
-    return int(time.time() * 1000.0)
+    from schema import (  # type: ignore[no-redef]
+        ahora_ms, decodificar_ndjson, validate_message,
+    )
 
 
 # --------------------------------------------------------------------------

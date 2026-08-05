@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import json
 import math
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -81,6 +82,24 @@ _CAMPOS_CUBE = frozenset(("color", "col", "row", "age_ms"))
 _CAMPOS_OBSTACLE = frozenset(("col", "row", "age_ms"))
 _CAMPOS_START = frozenset(("col", "row"))
 _CAMPOS_DEPOT = frozenset(("color", "col", "row"))
+
+
+# --------------------------------------------------------------------------
+# Base de tiempo del protocolo
+# --------------------------------------------------------------------------
+
+
+def ahora_ms() -> int:
+    """Reloj de pared en milisegundos desde época.
+
+    Es de pared y no monótono a propósito: el cliente mide latencia como
+    `ahora - ts_ms`, y para eso ambos extremos tienen que hablar del mismo
+    origen de tiempo.
+
+    Vive acá —y no en cada productor— porque quien escribe `ts_ms` y quien lo
+    interpreta tienen que usar la misma base de tiempo, siempre.
+    """
+    return int(time.time() * 1000.0)
 
 
 # --------------------------------------------------------------------------

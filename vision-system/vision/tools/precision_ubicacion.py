@@ -246,9 +246,11 @@ def lejos_de_las_esquinas(celda, cfg, margen) -> bool:
 # --------------------------------------------------------------------------
 
 
+#: Cómo se le nombra al operador cada dirección de desplazamiento. No hace falta
+#: un vector: la medición compara la DISTANCIA |B - A|, no el sentido.
 _DIRECCIONES = {
-    "horizontal": ("DERECHA", (1.0, 0.0)),
-    "vertical": ("ABAJO", (0.0, 1.0)),
+    "horizontal": "DERECHA",
+    "vertical": "ABAJO",
 }
 
 
@@ -590,7 +592,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         while indice_paso < len(pasos):
             zona, col_obj, row_obj, direccion = pasos[indice_paso]
-            nombre_dir, vector = _DIRECCIONES[direccion]
+            nombre_dir = _DIRECCIONES[direccion]
             if actual is None:
                 actual = Medicion(zona, direccion, cuadros, cfg.tablero.cell_mm, k)
 
