@@ -166,7 +166,8 @@ class Calibracion:
     vistas_objetivo: int
     modelo: str
     alpha: float
-    perfil: str
+    carpeta_perfiles: str
+    perfil_por_defecto: str | None
     excelente_px: float
     bueno_px: float
     aceptable_px: float
@@ -179,9 +180,36 @@ class Calibracion:
         """Como lo espera OpenCV: (columnas, filas) de esquinas internas."""
         return (self.columnas_internas, self.filas_internas)
 
-    def ruta_perfil(self, base: str) -> str:
-        """Ruta absoluta del perfil, resuelta contra la carpeta `vision/`."""
-        return self.perfil if os.path.isabs(self.perfil) else os.path.join(base, self.perfil)
+    def carpeta(self, base: str) -> str:
+        """Carpeta absoluta donde viven los perfiles, resuelta contra `vision/`."""
+        return (self.carpeta_perfiles if os.path.isabs(self.carpeta_perfiles)
+                else os.path.join(base, self.carpeta_perfiles))
+
+    def ruta_de(self, nombre_archivo: str, base: str) -> str:
+        """Ruta del perfil de una cámara, a partir del nombre de su archivo."""
+        return os.path.join(self.carpeta(base), nombre_archivo + ".json")
+
+
+@dataclass(frozen=True, slots=True)
+class Precision:
+    """Prueba de precisión de ubicación sobre hardware real.
+
+    Mide un DESPLAZAMIENTO conocido —contando cuadros de la cuadrícula, que es
+    exacto— en vez de una posición absoluta. Eso evita tener que ubicar el
+    origen con precisión y neutraliza el paralaje, que sobre una resta queda
+    como un error de escala puro y por lo tanto descontable.
+    """
+
+    umbral_mm: float
+    id_marcador_prueba: int
+    lado_marcador_mm: float
+    cuadros_por_medicion: int
+    muestras_por_punto: int
+    margen_marcadores_celdas: float
+    altura_camara_mm: float
+    altura_marcador_mm: float
+    zonas: tuple[dict[str, Any], ...]
+    carpeta_mediciones: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +219,7 @@ class ConfigVision:
     sintetico: Sintetico
     camara: Camara
     calibracion: Calibracion
+    precision: Precision
     rovers_demo: tuple[RoverDemo, ...]
 
 
@@ -269,13 +298,29 @@ def _leer_calibracion(d: dict[str, Any]) -> Calibracion:
         vistas_objetivo=int(d["vistas_objetivo"]),
         modelo=str(d["modelo"]).lower(),
         alpha=float(d["alpha"]),
-        perfil=str(d["perfil"]),
+        carpeta_perfiles=str(d["carpeta_perfiles"]),
+        perfil_por_defecto=d.get("perfil_por_defecto") or None,
         excelente_px=float(u["excelente_px"]),
         bueno_px=float(u["bueno_px"]),
         aceptable_px=float(u["aceptable_px"]),
         estabilidad_px=float(u["estabilidad_px"]),
         inclinacion_min=float(u["inclinacion_min"]),
         pausa_s=float(u["pausa_s"]),
+    )
+
+
+def _leer_precision(d: dict[str, Any]) -> Precision:
+    return Precision(
+        umbral_mm=float(d["umbral_mm"]),
+        id_marcador_prueba=int(d["id_marcador_prueba"]),
+        lado_marcador_mm=float(d["lado_marcador_mm"]),
+        cuadros_por_medicion=int(d["cuadros_por_medicion"]),
+        muestras_por_punto=int(d["muestras_por_punto"]),
+        margen_marcadores_celdas=float(d["margen_marcadores_celdas"]),
+        altura_camara_mm=float(d["altura_camara_mm"]),
+        altura_marcador_mm=float(d["altura_marcador_mm"]),
+        zonas=tuple(d["zonas"]),
+        carpeta_mediciones=str(d["carpeta_mediciones"]),
     )
 
 
@@ -313,6 +358,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
 
     camara = _leer_camara(d["camara"])
     calibracion = _leer_calibracion(d["calibracion"])
+    precision = _leer_precision(d["precision"])
 
     rovers = tuple(
         RoverDemo(id=int(r["id"]), col=float(r["col"]), row=float(r["row"]), theta=float(r["theta"]))
@@ -325,6 +371,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         sintetico=sintetico,
         camara=camara,
         calibracion=calibracion,
+        precision=precision,
         rovers_demo=rovers,
     )
     error = revisar_config(cfg)
@@ -403,4 +450,18 @@ def revisar_config(cfg: ConfigVision) -> str | None:
         return "calibracion.vistas_minimas: con menos de 6 vistas la calibración no es confiable"
     if k.papel not in ("carta", "a4", "oficio"):
         return "calibracion.papel desconocido: {!r}".format(k.papel)
+    pr = cfg.precision
+    if pr.umbral_mm <= 0:
+        return "precision.umbral_mm debe ser > 0"
+    if pr.id_marcador_prueba in cfg.marcadores_esquina.ids_esperados:
+        return (
+            "precision.id_marcador_prueba = {} choca con los marcadores de esquina: "
+            "el marcador de prueba tiene que tener un ID distinto".format(pr.id_marcador_prueba)
+        )
+    if pr.cuadros_por_medicion < 2:
+        return "precision.cuadros_por_medicion: con menos de 2 cuadros la medición no es sensible"
+    if pr.altura_camara_mm <= pr.altura_marcador_mm:
+        return "precision.altura_camara_mm tiene que ser mayor que altura_marcador_mm"
+    if not pr.zonas:
+        return "precision.zonas: hace falta al menos una zona donde medir"
     return None

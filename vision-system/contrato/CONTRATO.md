@@ -120,32 +120,32 @@ línea**):
   "seq": 4137,
   "ts_ms": 1785012345678,
   "phase": "RUNNING",
-  "grid": { "cols": 50, "rows": 50, "cell_mm": 20.0 },
+  "grid": { "cols": 43, "rows": 43, "cell_mm": 20.0 },
   "rovers": [
     { "id": 10, "col": 4.302,  "row": 3.705,  "theta": 46.20, "age_ms": 0 },
-    { "id": 11, "col": 18.265, "row": 33.661, "theta": 40.22, "age_ms": 0 }
+    { "id": 11, "col": 15.265, "row": 28.661, "theta": 40.22, "age_ms": 0 }
   ],
   "cubes": [
-    { "color": "green", "col": 29.968, "row": 11.999, "age_ms": 0   },
-    { "color": "blue",  "col": 18.000, "row": 34.000, "age_ms": 425 },
-    { "color": "red",   "col": 38.071, "row": 29.983, "age_ms": 0   }
+    { "color": "green", "col": 25.968, "row": 9.999,  "age_ms": 0   },
+    { "color": "blue",  "col": 15.000, "row": 29.000, "age_ms": 425 },
+    { "color": "red",   "col": 33.071, "row": 25.983, "age_ms": 0   }
   ],
   "obstacles": [
-    { "col": 24.968, "row": 25.011, "age_ms": 0 },
-    { "col": 12.014, "row": 19.952, "age_ms": 0 },
-    { "col": 35.946, "row": 17.951, "age_ms": 0 }
+    { "col": 21.468, "row": 21.511, "age_ms": 0 },
+    { "col": 10.014, "row": 16.952, "age_ms": 0 },
+    { "col": 30.946, "row": 14.951, "age_ms": 0 }
   ],
   "start":  { "col": 2.5, "row": 2.5 },
   "depots": [
-    { "color": "green", "col": 47.5, "row": 2.5  },
-    { "color": "blue",  "col": 2.5,  "row": 47.5 },
-    { "color": "red",   "col": 47.5, "row": 47.5 }
+    { "color": "green", "col": 40.5, "row": 2.5  },
+    { "color": "blue",  "col": 2.5,  "row": 40.5 },
+    { "color": "red",   "col": 40.5, "row": 40.5 }
   ]
 }
 ```
 
 > Mirá el cubo **azul**: `age_ms: 425`. El rover 11 está justo encima
-> (`18.265, 33.661`) y lo tapa. El cubo **no desapareció** de la lista: sigue
+> (`15.265, 28.661`) y lo tapa. El cubo **no desapareció** de la lista: sigue
 > ahí, con su última posición conocida y la edad creciendo. Esto es lo normal,
 > no un error. Ver la sección 6.
 
@@ -177,8 +177,17 @@ línea**):
 | `cell_mm` | float | Lado de una celda en milímetros. Vale `20.0`. |
 
 **Lean `grid` del mensaje, no lo hardcodeen.** La cancha efectiva es el área
-encerrada por los cuatro marcadores ArUco de esquina, y depende de dónde se
-peguen los marcadores el día del montaje. Puede no ser exactamente 50×50.
+encerrada por los **centros** de los cuatro marcadores ArUco de esquina, y
+depende de dónde se peguen el día del montaje.
+
+> **Ojo: el tablero físico y la cancha del sistema son dos números distintos.**
+> En la cancha actual, el tablero mide **50 × 50 cuadros** pero la cancha
+> efectiva es de **43 × 43 celdas**, porque los marcadores van pegados hacia
+> adentro del borde. Los 7 cuadros de diferencia son margen y **no se usan**:
+> todo el juego ocurre dentro del área de 43 × 43.
+>
+> Por eso `grid` viene en cada mensaje y hay que leerlo de ahí. Si montan otra
+> cancha, el número va a ser otro.
 
 ### `rovers[]`
 
@@ -524,7 +533,7 @@ python3 mock_publisher.py
 ==================================================================
 Simulador del Vision-Rover-Challenge — protocolo v1
 Publicando NDJSON en 0.0.0.0:2026 a 20 Hz
-Cancha: 50x50 celdas de 20 mm
+Cancha: 43x43 celdas de 20 mm
 Comandos: ready | start | stop | quit
 ==================================================================
 ```
@@ -576,15 +585,15 @@ Conectando a 127.0.0.1:2026 ...
 Conectado. Ctrl-C para cortar.
 
 --- primer mensaje: ejemplo de consumo -------------------------
-  cancha: 50x50 celdas de 20.0 mm  |  fase: IDLE
+  cancha: 43x43 celdas de 20.0 mm  |  fase: IDLE
   rover id=10  col=3.99 row=3.94 theta=46.0°  age=0 ms
   rover id=11  col=3.98 row=8.00 theta=43.7°  age=0 ms
-  cubo green en (29.95, 12.03) -> depot (47.50, 2.50)  age=0 ms
-  cubo blue  en (17.99, 34.04) -> depot (2.50, 47.50)  age=0 ms
-  cubo red   en (37.99, 29.95) -> depot (47.50, 47.50)  age=0 ms
-  obstáculo amarillo en (24.99, 24.99)
-  obstáculo amarillo en (11.96, 19.96)
-  obstáculo amarillo en (35.99, 18.11)
+  cubo green en (25.97, 10.03) -> depot (40.50, 2.50)  age=0 ms
+  cubo blue  en (14.99, 29.04) -> depot (2.50, 40.50)  age=0 ms
+  cubo red   en (32.99, 25.95) -> depot (40.50, 40.50)  age=0 ms
+  obstáculo amarillo en (21.49, 21.49)
+  obstáculo amarillo en (9.96, 16.96)
+  obstáculo amarillo en (30.99, 15.11)
   salida en (2.50, 2.50)
 ---------------------------------------------------------------
 
@@ -808,9 +817,9 @@ terminal del simulador. Vas a ver:
 
 ```
 fase=RUNNING  mi rover: col=13.66 row=3.38 theta=345.1
-   cubo green en (30.03, 11.97)  ->  depot (47.50, 2.50)
-   cubo blue  en (18.02, 33.96)  ->  depot (2.50, 47.50)
-   cubo red   en (37.98, 29.99)  ->  depot (47.50, 47.50)
+   cubo green en (26.03, 9.97)   ->  depot (40.50, 2.50)
+   cubo blue  en (15.02, 28.96)  ->  depot (2.50, 40.50)
+   cubo red   en (32.98, 25.99)  ->  depot (40.50, 40.50)
 ```
 
 **Detalles que importan de ese ejemplo, y por qué:**

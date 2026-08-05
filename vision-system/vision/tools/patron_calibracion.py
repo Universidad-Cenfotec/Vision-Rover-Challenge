@@ -336,6 +336,114 @@ def _pagina_instrucciones(pdf, ancho, alto, margen, cols, filas, lado, p_ancho, 
 
 
 # --------------------------------------------------------------------------
+# Marcador de prueba para medir precisión de ubicación
+# --------------------------------------------------------------------------
+
+
+def _modulos_de_marcador(id_aruco: int, diccionario: str = "DICT_4X4_50") -> list[list[bool]]:
+    """Devuelve el marcador como una grilla de módulos blanco/negro.
+
+    Se extrae el patrón de bits en vez de incrustar una imagen porque un
+    marcador ArUco **es** una grilla de cuadrados: dibujarlo como rectángulos lo
+    deja con bordes exactos a cualquier tamaño de impresión, sin el suavizado ni
+    la resolución limitada de una imagen embebida. Y el borde nítido es
+    justamente lo que el detector mide con precisión subpíxel.
+    """
+    import cv2  # solo hace falta acá; el ajedrezado se dibuja sin OpenCV
+    import numpy as np
+
+    constante = getattr(cv2.aruco, diccionario)
+    dicc = cv2.aruco.getPredefinedDictionary(constante)
+    # 4x4 bits + un módulo de borde negro por lado = 6x6 módulos
+    lado_modulos = 6
+    px_por_modulo = 20
+    imagen = cv2.aruco.generateImageMarker(dicc, id_aruco, lado_modulos * px_por_modulo)
+    grilla = []
+    for f in range(lado_modulos):
+        fila = []
+        for c in range(lado_modulos):
+            centro = imagen[f * px_por_modulo + px_por_modulo // 2,
+                            c * px_por_modulo + px_por_modulo // 2]
+            fila.append(bool(centro < 128))  # True = negro
+        grilla.append(fila)
+    return grilla
+
+
+def generar_marcador_prueba(
+    id_aruco: int, lado_mm: float, papel: str, horizontal: bool, margen_mm: float,
+    diccionario: str = "DICT_4X4_50",
+) -> bytes:
+    """PDF del marcador que se usa para medir la precisión de ubicación.
+
+    Lleva **marcas de alineación** en los cuatro lados, prolongadas hacia afuera
+    del marcador: sirven para apoyarlo contra las líneas de la cuadrícula del
+    tablero. De esa alineación depende toda la exactitud de la prueba, porque la
+    verdad se obtiene contando cuadros y no midiendo.
+    """
+    grilla = _modulos_de_marcador(id_aruco, diccionario)
+    n = len(grilla)
+    lado_modulo = lado_mm / n
+
+    ancho_papel, alto_papel = PAPELES[papel]
+    if horizontal:
+        ancho_papel, alto_papel = alto_papel, ancho_papel
+
+    pdf = _PDF(ancho_papel, alto_papel)
+    pdf.nueva_pagina()
+
+    x0 = (ancho_papel - lado_mm) / 2.0
+    y0 = alto_papel - margen_mm - 40.0 - lado_mm
+
+    for f in range(n):
+        for c in range(n):
+            if grilla[f][c]:
+                # El eje Y del PDF va hacia arriba y el del marcador hacia abajo.
+                pdf.rectangulo(x0 + c * lado_modulo,
+                               y0 + (n - 1 - f) * lado_modulo,
+                               lado_modulo, lado_modulo, gris=0.0)
+
+    # Marcas de alineación: pequeños trazos que continúan los bordes del
+    # marcador hacia afuera, para poder apoyarlo contra las líneas del tablero.
+    largo = 8.0
+    for x in (x0, x0 + lado_mm):
+        pdf.linea(x, y0 - largo, x, y0 - 1.5, 0.4, 0.45)
+        pdf.linea(x, y0 + lado_mm + 1.5, x, y0 + lado_mm + largo, 0.4, 0.45)
+    for y in (y0, y0 + lado_mm):
+        pdf.linea(x0 - largo, y, x0 - 1.5, y, 0.4, 0.45)
+        pdf.linea(x0 + lado_mm + 1.5, y, x0 + lado_mm + largo, y, 0.4, 0.45)
+
+    lineas = [
+        ("MARCADOR DE PRUEBA DE PRECISION", 13.0),
+        ("", 9.0),
+        ("ID {}  ·  {}  ·  {:.0f} x {:.0f} mm  =  {:.0f} x {:.0f} cuadros de 20 mm".format(
+            id_aruco, diccionario, lado_mm, lado_mm, lado_mm / 20.0, lado_mm / 20.0), 10.0),
+        ("", 9.0),
+        ("IMPRIMIR AL 100 % / TAMANO REAL. Nunca 'ajustar a la pagina'.", 10.0),
+        ("Verificar con la regla de abajo antes de usarlo.", 10.0),
+        ("", 9.0),
+        ("RECORTAR dejando el borde blanco: el detector lo necesita para", 10.0),
+        ("encontrar el marcador. No recortar al ras del negro.", 10.0),
+        ("", 9.0),
+        ("APOYARLO PLANO sobre el tablero, sin espesor. Los objetos con altura", 10.0),
+        ("se ven corridos hacia afuera (paralaje). Con papel comun el efecto es", 10.0),
+        ("despreciable; si se pega sobre algo mas grueso, declarar el espesor en", 10.0),
+        ("config_vision.json -> precision.altura_marcador_mm.", 10.0),
+        ("", 9.0),
+        ("ALINEAR sus bordes con las lineas de la cuadricula, usando las marcas", 10.0),
+        ("de los cuatro lados. De esa alineacion depende la exactitud de la", 10.0),
+        ("prueba: la distancia real se obtiene CONTANDO CUADROS, no midiendo.", 10.0),
+    ]
+    y = y0 - 22.0
+    for texto, tamano in lineas:
+        if texto:
+            pdf.texto(margen_mm, y, texto, tamano)
+        y -= tamano * 0.5 + 2.4
+
+    _dibujar_regla(pdf, margen_mm, margen_mm + 4.0)
+    return pdf.bytes()
+
+
+# --------------------------------------------------------------------------
 # Vista previa en PNG (para verificar sin imprimir)
 # --------------------------------------------------------------------------
 
@@ -378,6 +486,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--margen-mm", type=float, default=12.0)
     parser.add_argument("--salida", default="patron_calibracion.pdf")
     parser.add_argument("--vista-previa", default=None, help="además, guardar un PNG de control")
+    parser.add_argument("--marcador-prueba", type=int, default=None, metavar="ID",
+                        help="en vez del ajedrezado, generar el marcador de prueba de precisión")
+    parser.add_argument("--lado-marcador-mm", type=float, default=None,
+                        help="lado del marcador de prueba, en mm")
     args = parser.parse_args(argv)
 
     try:  # la configuración manda; los argumentos solo la pisan
@@ -390,6 +502,33 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:  # noqa: BLE001 — la herramienta tiene que servir sin config
         columnas, filas = args.columnas or 9, args.filas or 6
         lado, papel = args.lado_mm or 25.0, args.papel or "carta"
+
+    # --- marcador de prueba de precisión ---------------------------------
+    if args.marcador_prueba is not None:
+        try:
+            from vision.configuracion import cargar_config
+            pr = cargar_config().precision
+            lado = args.lado_marcador_mm or pr.lado_marcador_mm
+            dicc = cargar_config().marcadores_esquina.nombre_diccionario
+        except Exception:  # noqa: BLE001 — tiene que servir sin configuración
+            lado, dicc = args.lado_marcador_mm or 60.0, "DICT_4X4_50"
+        salida = args.salida
+        if salida == "patron_calibracion.pdf":
+            salida = "marcador_prueba_{}.pdf".format(args.marcador_prueba)
+        with open(salida, "wb") as f:
+            f.write(generar_marcador_prueba(args.marcador_prueba, lado, papel,
+                                            not args.vertical, args.margen_mm, dicc))
+        print("=" * 70)
+        print("MARCADOR DE PRUEBA GENERADO")
+        print("=" * 70)
+        print("  archivo   : {}".format(os.path.abspath(salida)))
+        print("  ID        : {}  ({})".format(args.marcador_prueba, dicc))
+        print("  lado      : {:.0f} mm  =  {:.0f} cuadros de la cuadrícula".format(lado, lado / 20.0))
+        print()
+        print("  Imprimir al 100 %, recortar DEJANDO el borde blanco, y apoyarlo")
+        print("  PLANO sobre el tablero alineado a las líneas de la cuadrícula.")
+        print("=" * 70)
+        return 0
 
     if columnas == filas:
         print("ERROR: columnas y filas deben ser DISTINTAS, o el detector no puede "

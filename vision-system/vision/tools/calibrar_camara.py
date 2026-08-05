@@ -39,24 +39,37 @@ try:  # como paquete
         ErrorCalibracion,
         PerfilCamara,
         Rectificador,
-        cargar_perfil,
+        comparar_con_camara,
+        elegir_perfil,
         guardar_perfil,
+        nombre_archivo,
+        perfiles_disponibles,
     )
     from ..sources.camara import ErrorCamara, FuenteCamara
+    from .panel import AMBAR, BLANCO, GRIS, Panel, Tipografia, escala_para
+    from .panel import ROJO as ROJO_P, VERDE as VERDE_P
 except ImportError:  # como script suelto
     from vision.configuracion import CONFIG_POR_DEFECTO, cargar_config  # type: ignore[no-redef]
     from vision.geometry.distorsion import (  # type: ignore[no-redef]
-        ErrorCalibracion, PerfilCamara, Rectificador, cargar_perfil, guardar_perfil,
+        ErrorCalibracion, PerfilCamara, Rectificador, comparar_con_camara, elegir_perfil,
+        guardar_perfil, nombre_archivo, perfiles_disponibles,
     )
     from vision.sources.camara import ErrorCamara, FuenteCamara  # type: ignore[no-redef]
+    from vision.tools.panel import (  # type: ignore[no-redef]
+        AMBAR, BLANCO, GRIS, Panel, Tipografia, escala_para,
+        ROJO as ROJO_P, VERDE as VERDE_P,
+    )
 
 BASE_VISION = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Colores en BGR para lo que se dibuja con OpenCV sobre el video. El panel usa
+# los de `panel.py`, que van en RGB: son espacios distintos y mezclarlos pinta
+# los avisos de un color equivocado.
 VERDE = (60, 200, 60)
 ROJO = (60, 60, 235)
 AMARILLO = (40, 200, 240)
-BLANCO = (245, 245, 245)
-GRIS = (150, 150, 150)
+_BLANCO_BGR = (245, 245, 245)
+_GRIS_BGR = (150, 150, 150)
 
 
 # --------------------------------------------------------------------------
@@ -307,10 +320,56 @@ def desviacion_de_recta(esquinas: np.ndarray, tamano: tuple[int, int]) -> float:
 # --------------------------------------------------------------------------
 
 
+def preguntar_nombre_camara(resolucion) -> str:
+    """Pide el nombre de la cámara que se está calibrando.
+
+    El nombre define en qué archivo se guarda el perfil, así que es lo que
+    impide que una calibración pise a otra. Se pregunta en vez de suponer:
+    OpenCV no expone el nombre del dispositivo, y usar uno fijo fue exactamente
+    lo que hizo que la C270 terminara con el perfil de la CAM40.
+    """
+    sugerido = "camara_{}x{}".format(*resolucion) if resolucion else "camara"
+    if not (sys.stdin and sys.stdin.isatty()):
+        return sugerido  # sin nadie a quién preguntar; el nombre feo se nota
+    print("\n  ¿Qué cámara estás calibrando? El nombre define el archivo del perfil,")
+    print("  así que dos cámaras con nombres distintos no se pisan.")
+    print("  Ejemplos: ArgomTech CAM40  ·  Logitech C270  ·  ArgomTech CAM20")
+    try:
+        respuesta = input("\n  Nombre de la cámara [Enter = {}]: ".format(sugerido)).strip()
+    except (EOFError, KeyboardInterrupt):
+        return sugerido
+    return respuesta or sugerido
+
+
+def confirmar_sobrescritura(ruta: str) -> bool:
+    """Si ya hay un perfil en ese archivo, avisa qué es antes de pisarlo.
+
+    Es la salvaguarda concreta para no perder una calibración buena por
+    reutilizar un nombre sin darse cuenta.
+    """
+    if not os.path.exists(ruta):
+        return True
+    try:
+        from vision.geometry.distorsion import cargar_perfil as _cargar
+        viejo = _cargar(ruta)
+        detalle = "{} · {} · error {:.3f} px · {} vistas".format(
+            viejo.camara, viejo.huella, viejo.rms_px, viejo.vistas)
+    except Exception:  # noqa: BLE001
+        detalle = "(no se pudo leer)"
+    print("\n  ⚠  YA EXISTE un perfil en {}".format(os.path.basename(ruta)))
+    print("     {}".format(detalle))
+    if not (sys.stdin and sys.stdin.isatty()):
+        print("     Sin terminal para confirmar: NO se sobrescribe.")
+        return False
+    try:
+        return input("\n     ¿Sobrescribirlo? [s/N]: ").strip().lower() in ("s", "si", "sí")
+    except (EOFError, KeyboardInterrupt):
+        return False
+
+
 def modo_calibrar(cfg, args) -> int:
     cal = cfg.calibracion
     tamano = cal.tamano_patron
-    ruta_perfil = cal.ruta_perfil(BASE_VISION)
 
     print("=" * 72)
     print("CALIBRACIÓN DE DISTORSIÓN")
@@ -319,7 +378,7 @@ def modo_calibrar(cfg, args) -> int:
         tamano[0], tamano[1], cal.lado_mm))
     print("  ¡Confirmá que ese lado de {:.1f} mm es el que MEDISTE con la regla".format(cal.lado_mm))
     print("  sobre el patrón impreso! Si no coincide, todo queda escalado.")
-    print("  modelo: {} · destino: {}".format(cal.modelo, ruta_perfil))
+    print("  modelo: {} · perfiles en: {}".format(cal.modelo, cal.carpeta(BASE_VISION)))
     print()
 
     try:
@@ -382,18 +441,18 @@ def modo_calibrar(cfg, args) -> int:
                  VERDE if esquinas is not None else ROJO),
                 ("quieto: {}".format("si" if estable else "no  (mantenelo firme)"),
                  VERDE if estable else AMARILLO),
-                ("", BLANCO),
+                ("", _BLANCO_BGR),
                 ("CAPTURAS: {} de {}".format(cobertura.total, cal.vistas_objetivo),
                  VERDE if cobertura.suficiente else BLANCO),
                 ("zonas {}   distancias {}/3   inclinadas {}/4".format(
                     mapa[0], len(cobertura.distancias), cobertura.inclinadas), BLANCO),
-                ("      {}".format(mapa[1]), BLANCO),
+                ("      {}".format(mapa[1]), _BLANCO_BGR),
                 ("      {}".format(mapa[2]), BLANCO),
-                ("", BLANCO),
+                ("", _BLANCO_BGR),
                 ("> {}".format(cobertura.que_falta()),
                  VERDE if cobertura.suficiente else AMARILLO),
-                ("", BLANCO),
-                ("[C] calibrar   [espacio] capturar   [D] borrar ultima   [Q] salir", GRIS),
+                ("", _BLANCO_BGR),
+                ("[C] calibrar   [espacio] capturar   [D] borrar ultima   [Q] salir", _GRIS_BGR),
             ]
             _panel(lienzo, lineas)
 
@@ -448,9 +507,15 @@ def modo_calibrar(cfg, args) -> int:
 
     veredicto, _, consejos = semaforo(rms, cal)
 
+    # El nombre de la cámara sale de lo que indique el usuario, no de una
+    # constante en el código. Es lo que hace que cada calibración vaya a su
+    # propio archivo en vez de pisar a la anterior.
+    nombre_camara = args.camara or preguntar_nombre_camara(resolucion)
+    ruta_perfil = cal.ruta_de(nombre_archivo(nombre_camara), BASE_VISION)
+
     perfil = PerfilCamara(
-        nombre=os.path.splitext(os.path.basename(ruta_perfil))[0],
-        camara="ArgomTech CAM40" if args.camara is None else args.camara,
+        nombre=nombre_archivo(nombre_camara),
+        camara=nombre_camara,
         fecha=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
         ancho=resolucion[0], alto=resolucion[1],
         modelo=cal.modelo,
@@ -477,10 +542,18 @@ def modo_calibrar(cfg, args) -> int:
         fuente.cerrar()
         return 1
 
+    if not confirmar_sobrescritura(ruta_perfil):
+        print("\n  No se guardó nada: el perfil existente quedó intacto.")
+        print("  Volvé a calibrar con otro nombre: --camara \"OTRO NOMBRE\"")
+        fuente.cerrar()
+        return 1
+
     guardar_perfil(perfil, ruta_perfil)
-    print("\n  perfil guardado en: {}".format(ruta_perfil))
-    print("  Verificalo con tus ojos:")
-    print("    python -m vision.tools.calibrar_camara --verificar")
+    print("\n  perfil de \"{}\" guardado en: {}".format(nombre_camara, ruta_perfil))
+    print("  huella del aparato: {}".format(perfil.huella))
+    print("\n  Verificalo con tus ojos:")
+    print("    python -m vision.tools.calibrar_camara --verificar --camara \"{}\"".format(
+        nombre_camara))
     fuente.cerrar()
     return 0
 
@@ -492,28 +565,48 @@ def modo_calibrar(cfg, args) -> int:
 
 def modo_verificar(cfg, args) -> int:
     cal = cfg.calibracion
-    ruta = cal.ruta_perfil(BASE_VISION)
-    try:
-        perfil = cargar_perfil(ruta)
-    except ErrorCalibracion as exc:
-        print("ERROR: {}".format(exc), file=sys.stderr)
-        return 2
 
-    print("Perfil cargado:")
-    print("  " + perfil.resumen.replace("\n", "\n  "))
-    print("\nApuntá la cámara a algo que sepas que es RECTO: el borde del tablero,")
-    print("las líneas de la cancha, el marco de una puerta. A la izquierda vas a ver")
-    print("la imagen cruda y a la derecha la corregida.\n")
-
+    # La cámara se abre PRIMERO: sin saber qué resolución entrega no se puede
+    # elegir el perfil que le corresponde ni comprobar si el elegido calza.
     try:
         fuente = FuenteCamara(cfg.camara, indice=args.indice)
     except ErrorCamara as exc:
         print("ERROR: {}".format(exc), file=sys.stderr)
         return 2
 
+    primero = None
+    limite = time.monotonic() + 10.0
+    while primero is None and time.monotonic() < limite:
+        primero = fuente.leer()
+        time.sleep(0.01)
+    if primero is None:
+        print("ERROR: la cámara no entregó ninguna imagen.", file=sys.stderr)
+        fuente.cerrar()
+        return 2
+    alto_cam, ancho_cam = primero.imagen.shape[:2]
+
+    interactivo = bool(sys.stdin and sys.stdin.isatty())
+    try:
+        perfil = elegir_perfil(cal, BASE_VISION, ancho_cam, alto_cam,
+                               nombre=args.camara, interactivo=interactivo)
+    except ErrorCalibracion as exc:
+        print("\nERROR: {}".format(exc), file=sys.stderr)
+        fuente.cerrar()
+        return 2
+
+    compat = comparar_con_camara(perfil, ancho_cam, alto_cam)
+    print("\nPerfil cargado:")
+    print("  " + perfil.resumen.replace("\n", "\n  "))
+    print(compat.mensaje())
+    print("Apuntá la cámara a algo que sepas que es RECTO: el borde del tablero,")
+    print("las líneas de la cancha, el marco de una puerta. A la izquierda vas a ver")
+    print("la imagen cruda y a la derecha la corregida.\n")
+
     rectificador = None
     mostrar_rejilla = True
     alpha = cal.alpha
+    veredicto_curvatura = None  # lo llena la medición sobre el patrón
+    tipografia = Tipografia(escala_para(alto_cam))
     ventana = "Antes (izq) y despues (der) de corregir la distorsion"
 
     try:
@@ -534,6 +627,13 @@ def modo_verificar(cfg, args) -> int:
             der = corregida.copy() if corregida.ndim == 3 else cv2.cvtColor(corregida, cv2.COLOR_GRAY2BGR)
 
             # Medida numérica de "quedó recto", cuando el patrón está a la vista.
+            #
+            # Esta es la comprobación que decide de verdad si el perfil
+            # corresponde a esta cámara: la huella (resolución y campo de visión)
+            # solo permite sospechar, pero si la corrección EMPEORA unas líneas
+            # que sabemos rectas, no hay nada que discutir. Es el mismo principio
+            # que ya usamos con los ajustes de cámara: verificar por efecto y no
+            # por lo que dice la etiqueta.
             texto_recta = ""
             e_antes = detectar_patron(imagen, cal.tamano_patron)
             if e_antes is not None:
@@ -541,8 +641,12 @@ def modo_verificar(cfg, args) -> int:
                 e_despues = detectar_patron(corregida, cal.tamano_patron)
                 if e_despues is not None:
                     d_despues = desviacion_de_recta(e_despues, cal.tamano_patron)
-                    texto_recta = "curvatura de las filas: {:.2f} px -> {:.2f} px".format(
+                    texto_recta = "curvatura de las filas: {:.2f} px → {:.2f} px".format(
                         d_antes, d_despues)
+                    if d_despues > d_antes * 1.15:
+                        veredicto_curvatura = ("empeora", d_antes, d_despues)
+                    elif d_despues < d_antes * 0.85:
+                        veredicto_curvatura = ("corrige", d_antes, d_despues)
                 cv2.drawChessboardCorners(izq, cal.tamano_patron, e_antes, True)
 
             if mostrar_rejilla:
@@ -559,18 +663,39 @@ def modo_verificar(cfg, args) -> int:
             if escala < 1.0:
                 par = cv2.resize(par, None, fx=escala, fy=escala, interpolation=cv2.INTER_AREA)
 
-            lineas = [
-                ("error de la calibracion: {:.3f} px".format(perfil.rms_px), BLANCO),
-                ("recorte alpha = {:.2f}".format(alpha), BLANCO),
-            ]
+            # El estado del perfil va como fila PERMANENTE del panel, no como un
+            # mensaje de consola que pasó hace un minuto y ya no está a la vista.
+            panel = Panel(tipografia)
+            panel.titulo("Verificación de la corrección de distorsión")
+            if veredicto_curvatura and veredicto_curvatura[0] == "empeora":
+                panel.destacado("EL PERFIL NO CORRESPONDE", ROJO_P,
+                                "la corrección EMPEORA líneas que son rectas")
+            elif compat.nivel == "incompatible":
+                panel.destacado("EL PERFIL NO CORRESPONDE", ROJO_P, compat.motivo[:70])
+            elif veredicto_curvatura and veredicto_curvatura[0] == "corrige":
+                panel.destacado("El perfil CORRIGE", VERDE_P,
+                                "las líneas rectas quedan rectas")
+            else:
+                panel.destacado("Perfil: {}".format(perfil.camara), BLANCO,
+                                "error {:.3f} px · {}".format(perfil.rms_px, perfil.huella))
+            panel.separador()
+            panel.estado("Perfil", "{} · {}".format(perfil.camara, perfil.huella),
+                         VERDE_P if compat.nivel == "compatible" else
+                         (AMBAR if compat.nivel == "sospechoso" else ROJO_P))
+            panel.estado("Cámara conectada", "{}x{}".format(ancho, alto), GRIS)
+            panel.estado("Compatibilidad", compat.etiqueta,
+                         VERDE_P if compat.nivel == "compatible" else
+                         (AMBAR if compat.nivel == "sospechoso" else ROJO_P))
             if texto_recta:
-                lineas.append((texto_recta, VERDE))
-            lineas += [
-                ("", BLANCO),
-                ("Las lineas naranjas son PERFECTAMENTE rectas: compara contra ellas.", GRIS),
-                ("[R] rejilla   [A] cambiar recorte   [G] guardar   [Q] salir", GRIS),
-            ]
-            _panel(par, lineas, ancho=620)
+                color_c = VERDE_P
+                if veredicto_curvatura and veredicto_curvatura[0] == "empeora":
+                    color_c = ROJO_P
+                panel.estado("Rectitud", texto_recta, color_c)
+            panel.separador()
+            panel.datos("recorte alpha = {:.2f}".format(alpha), GRIS)
+            panel.pie("Las líneas naranjas son PERFECTAMENTE rectas: compará contra ellas.")
+            panel.pie("r rejilla  ·  a recorte  ·  g guardar  ·  q salir")
+            panel.dibujar(par)
 
             try:
                 cv2.imshow(ventana, par)
@@ -604,7 +729,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="ver el antes y después con una calibración ya hecha")
     parser.add_argument("--manual", action="store_true",
                         help="solo capturar con la barra espaciadora")
-    parser.add_argument("--camara", default=None, help="nombre del modelo, para el perfil")
+    parser.add_argument("--camara", default=None,
+                        help="nombre de la cámara: define el archivo del perfil "
+                             "al calibrar, y cuál cargar al verificar")
     parser.add_argument("--guardar-igual", action="store_true",
                         help="guardar el perfil aunque el error sea alto")
     args = parser.parse_args(argv)

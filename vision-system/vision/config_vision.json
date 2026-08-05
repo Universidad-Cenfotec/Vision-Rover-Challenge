@@ -2,10 +2,17 @@
   "_acerca_de": "Configuración del sistema de visión. JSON no admite comentarios, así que las notas van en claves que empiezan con guion bajo; el cargador las ignora porque lee las claves por nombre. Nada de esto se incrusta en el código.",
 
   "tablero": {
-    "cols": 50,
-    "rows": 50,
+    "cols": 43,
+    "rows": 43,
     "cell_mm": 20.0,
-    "_nota_A_CONFIRMAR": "VALOR NOMINAL, A CONFIRMAR CONTRA LA CANCHA REAL. 50x50 celdas de 20 mm equivale a 1000 x 1000 mm. Pero la cancha efectiva NO es el tablero físico: es el área encerrada por los CENTROS de los cuatro marcadores ArUco de esquina. Según dónde se peguen los marcadores, esa área puede ser bastante menor. Una vez montada la cancha hay que medir entre centros de marcadores y ajustar cols/rows acá. Debe coincidir con la grilla que declara contrato/config_simulador.json."
+
+    "_MEDIDA_VERIFICADA": "43 x 43 celdas de 20 mm = 860 x 860 mm. Medido físicamente el 4-ago-2026 contando cuadros entre los CENTROS de los marcadores de esquina, en las dos dimensiones (ID 0 a ID 1, e ID 0 a ID 3).",
+
+    "_DOS_NUMEROS_DISTINTOS": "El tablero FÍSICO mide 50 x 50 cuadros; la CANCHA EFECTIVA del sistema mide 43 x 43 celdas. No es una contradicción: los marcadores no van en el borde exacto sino hacia adentro, y la cancha del sistema es el área ENTRE SUS CENTROS. Los 7 cuadros de diferencia (3,5 por lado) son el margen donde están pegados los marcadores, y son BORDE MUERTO: no se usan para nada. Zonas de acopio, salida, cubos y robots viven todos dentro del área de 43 x 43. Si alguien mide el tablero, cuenta 50 y ve un 43 acá, la configuración NO está mal: está midiendo otra cosa.",
+
+    "_COMO_SE_DETECTO_EL_ERROR": "Antes acá decía 50, que era el valor nominal sin confirmar. La herramienta vision/tools/precision_ubicacion.py lo delató: reportaba 233 mm sobre desplazamientos reales de 200 mm, un error de escala del 16,5 % constante en todas las zonas y direcciones y con ruido bajísimo. Un error uniforme e independiente de la posición no puede ser de la cámara: solo puede ser la escala declarada. 1000/1.165 = 858 mm, que son 43 cuadros.",
+
+    "_nota_sincronizacion": "Este valor DEBE coincidir con la grilla de contrato/config_simulador.json. Los equipos desarrollan contra el simulador, así que si dicen cosas distintas, el código que funciona contra el simulador falla en la cancha."
   },
 
   "marcadores_esquina": {
@@ -170,8 +177,11 @@
     "alpha": 0.0,
     "_nota_alpha": "Cuánto campo visual se conserva al corregir. 0 = recorta a los píxeles válidos, sin bordes negros pero perdiendo algo de borde. 1 = conserva todo el campo, con bordes negros curvados que pueden confundir a los detectores. Si con 0 se pierde de vista algún marcador de esquina, subirlo.",
 
-    "perfil": "calibraciones/argomtech_cam40.json",
-    "_nota_perfil": "Dónde se guarda y de dónde se lee el resultado, relativo a vision/. Es el PERFIL DE CÁMARA del CLAUDE.md sección 5: los parámetros específicos de cada cámara van en configuración y no en el código, para poder tener más de una cámara sin bifurcar.",
+    "carpeta_perfiles": "calibraciones",
+    "perfil_por_defecto": "argomtech_cam40",
+    "_nota_perfiles": "Cada cámara tiene su PROPIO perfil en esta carpeta, relativa a vision/, y conviven sin pisarse: argomtech_cam40.json, logitech_c270.json, etc. Son los PERFILES DE CÁMARA del CLAUDE.md sección 5: los parámetros específicos de cada aparato van en configuración y no en el código.",
+    "_nota_por_defecto": "Qué cámara usa el sistema cuando nadie elige un perfil explícitamente: en modo automático o al arrancar sin selección. La cámara por defecto del sistema es la ArgomTech CAM40. Se declara acá como dato y no incrustada en el código, para poder cambiarla sin tocar nada.",
+    "_nota_por_que_no_una_ruta_fija": "Antes esto era UNA ruta fija, y el sistema cargaba ese archivo sin importar qué cámara estuviera conectada. Con dos cámaras eso significó corregir una Logitech C270 con el perfil de la CAM40 —que es gran angular y distorsiona mucho más—, deformando la imagen en vez de corregirla, y sin ningún error que lo delatara. De ahí que ahora cada cámara tenga su perfil y que el sistema compare la huella del perfil contra la cámara conectada.",
 
     "umbrales": {
       "excelente_px": 0.3,
@@ -184,6 +194,43 @@
       "pausa_s": 0.8,
       "_nota_captura": "estabilidad_px: cuánto se pueden mover las esquinas entre cuadros para considerar que el patrón está quieto (una foto movida arruina el promedio). inclinacion_min: cuánta deformación del contorno cuenta como vista inclinada. pausa_s: espera entre capturas automáticas."
     }
+  },
+
+  "precision": {
+    "_acerca_de": "Herramienta que mide la precisión de ubicación REAL de una cámara sobre el tablero, para decidir si una 720p alcanza. No mide una posición absoluta sino un DESPLAZAMIENTO conocido: eso evita tener que ubicar el origen con precisión, y además neutraliza el paralaje por construcción (ver la nota de altura_marcador_mm).",
+
+    "umbral_mm": 10.0,
+    "_nota_umbral": "Criterio de aceptación: error máximo por debajo de 1 cm en toda la cancha. Un cubo mide 60 mm, así que 10 mm de error mantiene el objetivo dentro del cubo.",
+
+    "id_marcador_prueba": 20,
+    "lado_marcador_mm": 60.0,
+    "_nota_marcador": "ID fuera de 0-3 (esquinas) y de 10-11 (rovers). 60 mm son exactamente 3 cuadros de la cuadrícula, así que se alinea a las líneas sin ambigüedad, y es del tamaño de un cubo. Se genera con: python -m vision.tools.patron_calibracion --marcador-prueba 20",
+
+    "cuadros_por_medicion": 10,
+    "_nota_cuadros": "Cuántos cuadros de la cuadrícula mover el marcador entre las dos capturas. 10 cuadros = 200 mm. La verdad se obtiene CONTANDO cuadros, que es exacto, en vez de midiendo con regla. Conviene usar tantos como entren en la zona: sobre 10 cuadros, 1 mm de desalineación pesa 0,5 %; sobre 20, la mitad.",
+
+    "muestras_por_punto": 30,
+    "_nota_muestras": "Cuadros de video a promediar en cada captura. Una sola muestra mezclaría el temblor de la detección con el error que se quiere medir. La dispersión de las muestras se reporta aparte como RUIDO: es la repetibilidad de la cámara, que es lo que más distingue una 720p de una 1080p.",
+
+    "margen_marcadores_celdas": 6.0,
+    "_nota_margen": "Distancia mínima a un marcador de esquina para aceptar una captura. Los cuatro marcadores son los que DEFINEN las coordenadas: medir el error sobre ellos daría cero por construcción y no probaría nada, como corregir con las propias respuestas. Todas las mediciones van sobre puntos internos independientes del ajuste.",
+
+    "altura_camara_mm": 1300.0,
+    "altura_marcador_mm": 0.2,
+    "_nota_paralaje": "Un objeto de altura h a distancia d del punto bajo la cámara se ve corrido a d*H/(H-h): una multiplicación alrededor de ese punto. Como se mide un DESPLAZAMIENTO, las dos posiciones se escalan por el mismo factor y el paralaje queda como un error de ESCALA puro, calculable y descontable. Con papel común (0,2 mm) aporta 0,03 mm sobre 200 mm; incluso con 10 mm de espesor aporta 1,55 mm. Ajustar altura_marcador_mm al espesor real del material usado: el sistema lo descuenta y lo muestra aparte para que no contamine el veredicto.",
+    "_nota_paralaje_sistema_real": "OJO: esto salva a ESTA prueba, no al sistema. La visión publica posiciones ABSOLUTAS, donde el paralaje no se cancela; su corrección sigue siendo necesaria y está planificada en geometry/.",
+
+    "zonas": [
+      { "nombre": "centro",            "col": 17, "row": 17 },
+      { "nombre": "superior-izquierda","col": 7,  "row": 7  },
+      { "nombre": "superior-derecha",  "col": 26, "row": 7  },
+      { "nombre": "inferior-derecha",  "col": 26, "row": 26 },
+      { "nombre": "inferior-izquierda","col": 7,  "row": 26 }
+    ],
+    "_nota_ubicacion_zonas": "Los puntos son de INICIO: desde ahí el marcador se mueve cuadros_por_medicion celdas hacia la derecha y hacia abajo. Con una cancha de 43, margen 6 a los marcadores y 10 de desplazamiento, la banda útil es [6, 37] y los inicios tienen que caer en [6, 27]. Si se cambia el tamaño de cancha o el desplazamiento, hay que revisar que estas cinco sigan cumpliendo.",
+    "_nota_zonas": "Centro y cuatro esquinas, HACIA ADENTRO de los marcadores. El error no es uniforme y suele ser peor en los bordes, que es donde el criterio se pone a prueba. En cada zona se mide en dos direcciones, porque la distorsión residual no afecta igual a los dos ejes.",
+
+    "carpeta_mediciones": "mediciones"
   },
 
   "rovers_demo": [

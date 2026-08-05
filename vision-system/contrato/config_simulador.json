@@ -8,10 +8,15 @@
   },
 
   "grid": {
-    "cols": 50,
-    "rows": 50,
+    "cols": 43,
+    "rows": 43,
     "cell_mm": 20.0,
-    "_nota_A_CONFIRMAR": "VALOR NOMINAL, A CONFIRMAR CONTRA LA CANCHA REAL. 50x50 celdas de 20 mm equivale a 1000 x 1000 mm. Pero la cancha efectiva NO es el tablero físico: es el área encerrada por los cuatro marcadores ArUco de esquina, medida entre sus orígenes. Según dónde se peguen los marcadores (margen de borde, tamaño del marcador impreso) esa área puede ser algo MENOR que 50x50 celdas: por ejemplo 47x47 si quedan 3 cm de margen por lado. Una vez montada la cancha, hay que medir el área entre marcadores y ajustar cols/rows acá. Los equipos NO deben asumir 50x50: tienen que leer grid del mensaje."
+
+    "_MEDIDA_VERIFICADA": "43 x 43 celdas de 20 mm = 860 x 860 mm, medido físicamente el 4-ago-2026 entre los CENTROS de los marcadores de esquina. Coincide con vision/config_vision.json, y tiene que seguir coincidiendo: los equipos desarrollan contra este simulador, así que si dice algo distinto de la cancha real, el código que les funciona acá les falla allá.",
+
+    "_DOS_NUMEROS_DISTINTOS": "El tablero FÍSICO mide 50 x 50 cuadros; la CANCHA EFECTIVA es de 43 x 43 celdas, que es el área entre los centros de los cuatro marcadores. Los 7 cuadros de diferencia son el margen donde van pegados los marcadores, y son borde muerto. Todo el juego vive dentro del área de 43 x 43.",
+
+    "_nota_equipos": "Los equipos NO deben asumir NINGÚN tamaño: tienen que leer grid del mensaje. Este número puede cambiar si se monta otra cancha."
   },
 
   "tasas": {
@@ -30,16 +35,16 @@
   "giro_rover_grados_s": 90.0,
 
   "cubes": [
-    { "color": "green", "col": 30.0, "row": 12.0 },
-    { "color": "blue", "col": 18.0, "row": 34.0 },
-    { "color": "red", "col": 38.0, "row": 30.0 }
+    { "color": "green", "col": 26.0, "row": 10.0 },
+    { "color": "blue", "col": 15.0, "row": 29.0 },
+    { "color": "red", "col": 33.0, "row": 26.0 }
   ],
   "_nota_cubes": "Cubos de 6 cm. El color ES la identidad: no puede haber dos del mismo color. Se admiten 2 o 3 cubos; para probar con 2, se borra una entrada. Todo cubo debe tener un depot de su color (el contrato lo exige).",
 
   "obstacles": [
-    { "col": 25.0, "row": 25.0 },
-    { "col": 12.0, "row": 20.0 },
-    { "col": 36.0, "row": 18.0 }
+    { "col": 21.5, "row": 21.5 },
+    { "col": 10.0, "row": 17.0 },
+    { "col": 31.0, "row": 15.0 }
   ],
   "_nota_obstacles": "Bloques amarillos de 10 cm. No llevan color ni id: el amarillo está reservado para obstáculos y son intercambiables entre sí.",
 
@@ -47,11 +52,11 @@
   "_nota_start": "Esquina de salida de los robots. Coincide con el origen (0,0), que es el marcador ArUco de menor ID (el 0). Está a 2.5 celdas del origen porque es el CENTRO de la zona de salida, no su vértice.",
 
   "depots": [
-    { "color": "green", "col": 47.5, "row": 2.5 },
-    { "color": "blue", "col": 2.5, "row": 47.5 },
-    { "color": "red", "col": 47.5, "row": 47.5 }
+    { "color": "green", "col": 40.5, "row": 2.5 },
+    { "color": "blue", "col": 2.5, "row": 40.5 },
+    { "color": "red", "col": 40.5, "row": 40.5 }
   ],
-  "_nota_depots_A_CONFIRMAR": "ASIGNACIÓN DE COLOR POR ESQUINA PROVISIONAL, DEBE COINCIDIR CON EL MONTAJE FÍSICO REAL. Las tres esquinas que no son la de salida son, en este orden: la de enfrente sobre el eje col (47.5, 2.5), la de enfrente sobre el eje row (2.5, 47.5) y la diagonal opuesta al origen (47.5, 47.5). Qué color se acopia en cuál se decide al armar la cancha; acá está puesto verde/azul/rojo solo para tener un escenario que corra. Antes de la competencia hay que mirar la cancha montada y corregir esta lista. Las coordenadas también dependen de cols/rows definitivos (ver _nota_A_CONFIRMAR en grid). Los equipos NO deben asumir qué color va en qué esquina: tienen que leer depots del mensaje.",
+  "_nota_depots_A_CONFIRMAR": "POSICIONES Y COLORES PROVISIONALES: siguen SIN confirmarse contra el montaje físico. Lo único que se corrigió al pasar la cancha a 43 celdas fue sacarlas de FUERA del tablero: los 47,5 anteriores caían afuera. Se mantuvo el margen de 2,5 celdas desde el borde de la cancha efectiva, o sea 43 - 2,5 = 40,5. Las tres esquinas que no son la de salida son: la de enfrente sobre el eje col (40.5, 2.5), la de enfrente sobre el eje row (2.5, 40.5) y la diagonal opuesta al origen (40.5, 40.5). Qué color se acopia en cuál se decide al armar la cancha; acá está verde/azul/rojo solo para tener un escenario que corra. PRÓXIMO VALOR A CONFIRMAR FÍSICAMENTE, igual que se hizo con los marcadores: hay que mirar la cancha montada, medir dónde están realmente las zonas y corregir esta lista. Los equipos NO deben asumir qué color va en qué esquina: leen depots del mensaje.",
 
   "ruido": {
     "pos_sigma_celdas": 0.06,

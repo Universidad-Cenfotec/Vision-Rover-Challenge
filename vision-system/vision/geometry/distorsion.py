@@ -33,8 +33,13 @@ cuadros por segundo sobre 1080p, esa diferencia se nota.
 
 from __future__ import annotations
 
+import glob
 import json
+import math
 import os
+import re
+import sys
+import unicodedata
 from dataclasses import dataclass
 
 import cv2
@@ -75,6 +80,58 @@ class PerfilCamara:
     patron_filas: int
     patron_lado_mm: float
 
+    # -- huella del aparato -----------------------------------------------
+    #
+    # OpenCV no expone el nombre del dispositivo, así que un perfil no puede
+    # decir con certeza a qué cámara pertenece. Lo que sí puede es describir el
+    # aparato que midió: con qué resolución se calibró y qué campo de visión
+    # tiene el lente. Eso alcanza para SOSPECHAR que un perfil no corresponde,
+    # que es lo que faltaba cuando la C270 se corrigió con el perfil de la
+    # CAM40 y nadie se enteró hasta ver la imagen deformada.
+    #
+    # El campo de visión se DEDUCE de la matriz en vez de guardarse: así los
+    # perfiles hechos antes de este cambio lo tienen igual, sin reescribirlos.
+
+    @property
+    def fov_horizontal(self) -> float:
+        return 2.0 * math.degrees(math.atan(self.ancho / (2.0 * self.matriz[0, 0])))
+
+    @property
+    def fov_vertical(self) -> float:
+        return 2.0 * math.degrees(math.atan(self.alto / (2.0 * self.matriz[1, 1])))
+
+    @property
+    def fov_diagonal(self) -> float:
+        mitad = math.hypot(self.ancho / (2.0 * self.matriz[0, 0]),
+                           self.alto / (2.0 * self.matriz[1, 1]))
+        return 2.0 * math.degrees(math.atan(mitad))
+
+    @property
+    def aspecto(self) -> float:
+        return self.ancho / float(self.alto)
+
+    @property
+    def desplazamiento_borde_px(self) -> float:
+        """Cuánto mueve esta corrección un píxel de la esquina.
+
+        Es la medida de "qué tan fuerte" es el perfil. Un valor grande sobre una
+        cámara que no distorsiona tanto es exactamente lo que deforma la imagen.
+        """
+        c = self.coeficientes.ravel()
+        k1 = c[0] if len(c) > 0 else 0.0
+        k2 = c[1] if len(c) > 1 else 0.0
+        k3 = c[4] if len(c) > 4 else 0.0
+        r = math.hypot(self.ancho / (2.0 * self.matriz[0, 0]),
+                       self.alto / (2.0 * self.matriz[1, 1]))
+        factor = 1.0 + k1 * r ** 2 + k2 * r ** 4 + k3 * r ** 6
+        return abs(math.hypot(self.ancho / 2.0, self.alto / 2.0) * (factor - 1.0))
+
+    @property
+    def huella(self) -> str:
+        """Una línea que describe el aparato, para poder compararlo de un vistazo."""
+        return "{}x{}  ·  {:.0f}° diagonal  ·  corrección de {:.0f} px en el borde".format(
+            self.ancho, self.alto, self.fov_diagonal, self.desplazamiento_borde_px)
+
     def a_dict(self) -> dict:
         return {
             "nombre": self.nombre,
@@ -91,6 +148,15 @@ class PerfilCamara:
                 "filas_internas": self.patron_filas,
                 "lado_mm": self.patron_lado_mm,
             },
+            # Estos dos se guardan solo para que el archivo se pueda leer a ojo;
+            # al cargar se recalculan, así que un perfil viejo sin ellos vale
+            # exactamente igual.
+            "campo_vision_grados": {
+                "horizontal": round(self.fov_horizontal, 2),
+                "vertical": round(self.fov_vertical, 2),
+                "diagonal": round(self.fov_diagonal, 2),
+            },
+            "desplazamiento_borde_px": round(self.desplazamiento_borde_px, 1),
         }
 
     @property
@@ -150,6 +216,233 @@ def cargar_perfil(ruta: str) -> PerfilCamara:
         )
     except (KeyError, ValueError, TypeError) as exc:
         raise ErrorCalibracion("el perfil {} está incompleto o dañado: {}".format(ruta, exc))
+
+
+@dataclass(frozen=True, slots=True)
+class Compatibilidad:
+    """Si un perfil parece corresponder a la cámara que está conectada.
+
+    Es una SOSPECHA, no un veredicto: dos cámaras distintas pueden entregar la
+    misma resolución, así que la huella no identifica el aparato con certeza.
+    Por eso el sistema **avisa y deja seguir** en vez de bloquear: una
+    identificación imperfecta que frena por un falso positivo es peor que una
+    que informa y deja decidir. A veces uno quiere aplicar un perfil ajeno
+    justamente para comprobar que está mal.
+    """
+
+    nivel: str  # "compatible" | "sospechoso" | "incompatible"
+    motivo: str
+    perfil_dice: str
+    camara_dice: str
+    sugerencia: str
+
+    @property
+    def hay_problema(self) -> bool:
+        return self.nivel != "compatible"
+
+    @property
+    def etiqueta(self) -> str:
+        return {"compatible": "el perfil corresponde",
+                "sospechoso": "revisar · puede no corresponder",
+                "incompatible": "EL PERFIL NO CORRESPONDE"}[self.nivel]
+
+    def mensaje(self) -> str:
+        """El aviso para consola: qué esperaba el perfil y qué hay conectado.
+
+        Enfrentar las dos huellas es lo que permite entender *qué pasó*, en vez
+        de solo enterarse de que algo anda mal.
+        """
+        titulo = {"compatible": "  ✓  Perfil compatible con la cámara conectada.",
+                  "sospechoso": "  ⚠  REVISAR: el perfil podría no ser de esta cámara",
+                  "incompatible": "  ⚠  EL PERFIL NO CORRESPONDE A ESTA CÁMARA"}[self.nivel]
+        if self.nivel == "compatible":
+            return titulo + ("\n     ℹ  " + self.motivo if self.motivo else "")
+        return "\n".join([
+            "", titulo, "",
+            "     " + self.motivo, "",
+            "     El perfil fue hecho con:", "        " + self.perfil_dice, "",
+            "     La cámara conectada entrega:", "        " + self.camara_dice, "",
+            "     " + self.sugerencia, "",
+        ])
+
+
+def comparar_con_camara(perfil: PerfilCamara, ancho: int, alto: int) -> Compatibilidad:
+    """Contrasta la huella del perfil contra lo que entrega la cámara.
+
+    Se acumulan TODAS las señales en vez de quedarse con la primera, porque
+    suelen aparecer juntas y cada una explica una parte. El caso real que motivó
+    todo esto —la C270 corregida con el perfil de la CAM40— tiene la misma
+    relación de aspecto (los dos son 16:9), así que el chequeo de forma solo no
+    alcanzaba: lo que lo delata es que la corrección es desproporcionada.
+
+    Señales, de más grave a menos:
+
+    1. **Relación de aspecto distinta**: el perfil describe un sensor de otra
+       forma. Aplicarlo no corrige; deforma. Es incompatible sin vuelta.
+    2. **Corrección desproporcionada**: si mueve los píxeles del borde más de un
+       5 % del ancho, es un perfil de lente muy ancho. Sobre una cámara normal,
+       eso es exactamente lo que se ve como imagen deformada.
+    3. **Misma forma, distinto tamaño**: se escala y suele andar, pero pierde
+       precisión.
+    """
+    perfil_dice = perfil.huella
+    camara_dice = "{}x{}  ·  relación {:.3f}".format(ancho, alto, ancho / float(alto))
+    calibrar = ("Para calibrar esta cámara:\n"
+                "        python -m vision.tools.calibrar_camara --camara \"NOMBRE DE TU CÁMARA\"")
+    aspecto_camara = ancho / float(alto)
+
+    nivel = "compatible"
+    notas = []
+
+    if abs(aspecto_camara - perfil.aspecto) > 0.02:
+        nivel = "incompatible"
+        notas.append(
+            "La relación de aspecto no coincide ({:.3f} en el perfil contra {:.3f} en la "
+            "cámara): el perfil describe un sensor de otra forma. Aplicarlo va a DEFORMAR "
+            "la imagen en vez de corregirla.".format(perfil.aspecto, aspecto_camara))
+    elif (ancho, alto) != (perfil.ancho, perfil.alto):
+        nivel = "sospechoso"
+        notas.append(
+            "El perfil se hizo a {}x{} y esta cámara entrega {}x{}: los parámetros se "
+            "escalan, lo que suele andar, pero pierde precisión.".format(
+                perfil.ancho, perfil.alto, ancho, alto))
+
+    # La corrección fuerte NO levanta la alarma por sí sola: en un gran angular
+    # es lo normal y correcto. Un aviso que salta siempre que se usa la CAM40
+    # con su propio perfil sería ruido, y el ruido entrena a ignorar los avisos.
+    # Solo AMPLIFICA una sospecha que ya existe por otro motivo; si no, queda
+    # como dato informativo.
+    if perfil.desplazamiento_borde_px > 0.05 * ancho:
+        texto = ("La corrección es fuerte: mueve los píxeles del borde {:.0f} px, un {:.0f} % "
+                 "del ancho, que es propio de un lente GRAN ANGULAR.".format(
+                     perfil.desplazamiento_borde_px,
+                     100.0 * perfil.desplazamiento_borde_px / ancho))
+        if nivel == "compatible":
+            informativo = texto + " Es lo esperable si esta cámara es gran angular."
+            return Compatibilidad("compatible", informativo, perfil_dice, camara_dice, "")
+        notas.append(texto + " Si esta cámara NO es gran angular, el perfil no es suyo y la "
+                             "imagen va a verse PEOR que la original.")
+
+    return Compatibilidad(nivel, "  ".join(notas), perfil_dice, camara_dice,
+                          calibrar if notas else "")
+
+
+# --------------------------------------------------------------------------
+# Los perfiles como archivos: nombrar, listar y elegir
+# --------------------------------------------------------------------------
+
+
+def nombre_archivo(nombre_camara: str) -> str:
+    """Convierte "Logitech C270" en "logitech_c270".
+
+    El nombre humano se guarda dentro del perfil; el del archivo tiene que ser
+    seguro en cualquier sistema de archivos y fácil de escribir en una línea de
+    comandos.
+    """
+    texto = unicodedata.normalize("NFKD", nombre_camara).encode("ascii", "ignore").decode("ascii")
+    texto = re.sub(r"[^a-zA-Z0-9]+", "_", texto).strip("_").lower()
+    return texto or "camara"
+
+
+def perfiles_disponibles(carpeta: str) -> list[PerfilCamara]:
+    """Todos los perfiles guardados, ordenados por nombre. Ignora los ilegibles."""
+    perfiles = []
+    for ruta in sorted(glob.glob(os.path.join(carpeta, "*.json"))):
+        try:
+            perfiles.append(cargar_perfil(ruta))
+        except ErrorCalibracion:
+            continue  # un archivo roto no debe impedir usar los demás
+    return perfiles
+
+
+def _menu_perfiles(perfiles: list[PerfilCamara], por_defecto: int) -> PerfilCamara | None:
+    """Deja elegir el perfil, marcando cuál calza con la cámara conectada."""
+    print()
+    print("  PERFILES DE CALIBRACIÓN DISPONIBLES")
+    print("  " + "-" * 72)
+    for i, p in enumerate(perfiles):
+        print("  [{}]  {:<20} {:<11} {:>3.0f}° diag   error {:.3f} px   {}".format(
+            i, p.camara[:20], "{}x{}".format(p.ancho, p.alto), p.fov_diagonal,
+            p.rms_px, p.fecha[:10]))
+    print("  " + "-" * 72)
+    while True:
+        try:
+            respuesta = input(
+                "\n  Elegí el perfil para esta cámara [Enter = {}, q = salir]: ".format(
+                    por_defecto)).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return None
+        if respuesta in ("q", "salir"):
+            return None
+        if respuesta == "":
+            return perfiles[por_defecto]
+        if respuesta.isdigit() and 0 <= int(respuesta) < len(perfiles):
+            return perfiles[int(respuesta)]
+        print("  Valor inválido. Opciones: 0 a {}".format(len(perfiles) - 1))
+
+
+def elegir_perfil(
+    cal, base_vision: str, ancho: int | None = None, alto: int | None = None,
+    nombre: str | None = None, interactivo: bool = False,
+) -> PerfilCamara:
+    """Decide qué perfil de calibración usar.
+
+    La cascada, de más explícito a más automático:
+
+    1. **`nombre` dado** (`--camara`): se usa ese y nada más. Sin ambigüedad.
+    2. **Un solo perfil guardado**: se usa ese.
+    3. **Varios, con terminal**: menú, preseleccionando el que coincide con la
+       resolución de la cámara conectada; si ninguno coincide, el perfil por
+       defecto de la configuración.
+    4. **Varios, sin terminal** (modo automático): el **perfil por defecto**.
+
+    El punto 4 es el que mantiene andando lo que ya funcionaba: el sistema
+    corriendo solo nunca pregunta y carga la cámara declarada por defecto.
+    """
+    carpeta = cal.carpeta(base_vision)
+
+    if nombre:
+        ruta = os.path.join(carpeta, nombre_archivo(nombre) + ".json")
+        if not os.path.exists(ruta):
+            disponibles = [p.nombre for p in perfiles_disponibles(carpeta)]
+            raise ErrorCalibracion(
+                "no hay perfil para {!r} (se buscó {}).\n"
+                "  Perfiles disponibles: {}\n"
+                "  Para calibrar esa cámara:\n"
+                "    python -m vision.tools.calibrar_camara --camara {!r}".format(
+                    nombre, os.path.basename(ruta), disponibles or "ninguno", nombre)
+            )
+        return cargar_perfil(ruta)
+
+    perfiles = perfiles_disponibles(carpeta)
+    if not perfiles:
+        raise ErrorCalibracion(
+            "no hay ningún perfil de calibración en {}.\n"
+            "  Hay que calibrar la cámara primero:\n"
+            "    python -m vision.tools.calibrar_camara --camara \"NOMBRE DE TU CÁMARA\"".format(
+                carpeta)
+        )
+    if len(perfiles) == 1:
+        return perfiles[0]
+
+    # Preselección: el que calza con la cámara conectada; si no, el por defecto.
+    indice = 0
+    if ancho and alto:
+        calzan = [i for i, p in enumerate(perfiles) if (p.ancho, p.alto) == (ancho, alto)]
+        if calzan:
+            indice = calzan[0]
+    if indice == 0 and cal.perfil_por_defecto:
+        porn = [i for i, p in enumerate(perfiles) if p.nombre == cal.perfil_por_defecto]
+        if porn:
+            indice = porn[0]
+
+    if interactivo:
+        elegido = _menu_perfiles(perfiles, indice)
+        if elegido is None:
+            raise ErrorCalibracion("elección de perfil cancelada.")
+        return elegido
+    return perfiles[indice]
 
 
 class Rectificador:

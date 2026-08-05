@@ -1,0 +1,138 @@
+{
+  "fecha": "2026-08-04 17:50",
+  "camara": "Logitech C270",
+  "perfil": "logitech_c270",
+  "resolucion": {
+    "ancho": 1280,
+    "alto": 720
+  },
+  "umbral_mm": 10.0,
+  "altura_camara_mm": 1300.0,
+  "altura_marcador_mm": 0.2,
+  "error_maximo_mm": 33.922,
+  "error_medio_mm": 32.42,
+  "ruido_medio_mm": 0.25,
+  "sirve": false,
+  "mediciones": [
+    {
+      "zona": "centro",
+      "direccion": "horizontal",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 233.011,
+      "distancia_sin_paralaje_mm": 232.975,
+      "aporte_paralaje_mm": 0.036,
+      "error_mm": 32.975,
+      "error_relativo_pct": 16.4875,
+      "ruido_mm": 0.279
+    },
+    {
+      "zona": "centro",
+      "direccion": "vertical",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 231.045,
+      "distancia_sin_paralaje_mm": 231.009,
+      "aporte_paralaje_mm": 0.036,
+      "error_mm": 31.009,
+      "error_relativo_pct": 15.5046,
+      "ruido_mm": 0.291
+    },
+    {
+      "zona": "superior-izquierda",
+      "direccion": "horizontal",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 233.958,
+      "distancia_sin_paralaje_mm": 233.922,
+      "aporte_paralaje_mm": 0.036,
+      "error_mm": 33.922,
+      "error_relativo_pct": 16.9611,
+      "ruido_mm": 0.284
+    },
+    {
+      "zona": "superior-izquierda",
+      "direccion": "vertical",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 232.03,
+      "distancia_sin_paralaje_mm": 231.994,
+      "aporte_paralaje_mm": 0.036,
+      "error_mm": 31.994,
+      "error_relativo_pct": 15.9972,
+      "ruido_mm": 0.229
+    },
+    {
+      "zona": "superior-derecha",
+      "direccion": "horizontal",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 232.76,
+      "distancia_sin_paralaje_mm": 232.724,
+      "aporte_paralaje_mm": 0.036,
+      "error_mm": 32.724,
+      "error_relativo_pct": 16.3621,
+      "ruido_mm": 0.243
+    },
+    {
+      "zona": "superior-derecha",
+      "direccion": "vertical",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 232.286,
+      "distancia_sin_paralaje_mm": 232.25,
+      "aporte_paralaje_mm": 0.036,
+      "error_mm": 32.25,
+      "error_relativo_pct": 16.1249,
+      "ruido_mm": 0.299
+    },
+    {
+      "zona": "inferior-derecha",
+      "direccion": "horizontal",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 232.701,
+      "distancia_sin_paralaje_mm": 232.665,
+      "aporte_paralaje_mm": 0.036,
+      "error_mm": 32.665,
+      "error_relativo_pct": 16.3325,
+      "ruido_mm": 0.151
+    },
+    {
+      "zona": "inferior-derecha",
+      "direccion": "vertical",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 232.275,
+      "distancia_sin_paralaje_mm": 232.239,
+      "aporte_paralaje_mm": 0.036,
+      "error_mm": 32.239,
+      "error_relativo_pct": 16.1195,
+      "ruido_mm": 0.223
+    },
+    {
+      "zona": "inferior-izquierda",
+      "direccion": "horizontal",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 232.541,
+      "distancia_sin_paralaje_mm": 232.505,
+      "aporte_paralaje_mm": 0.036,
+      "error_mm": 32.505,
+      "error_relativo_pct": 16.2527,
+      "ruido_mm": 0.239
+    },
+    {
+      "zona": "inferior-izquierda",
+      "direccion": "vertical",
+      "cuadros": 10,
+      "distancia_real_mm": 200.0,
+      "distancia_reportada_mm": 231.948,
+      "distancia_sin_paralaje_mm": 231.912,
+      "aporte_paralaje_mm": 0.036,
+      "error_mm": 31.912,
+      "error_relativo_pct": 15.9562,
+      "ruido_mm": 0.257
+    }
+  ]
+}

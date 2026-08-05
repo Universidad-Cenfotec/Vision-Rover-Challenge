@@ -107,21 +107,59 @@ rovers.
 
 ---
 
-## 3. Medir la cancha después de pegar
+## 3. Dos números distintos: el tablero y la cancha
 
-La cancha efectiva es el área **entre los centros de los cuatro marcadores**, y
-va a ser **menor** que el tablero físico: los marcadores se pegan con algo de
-margen hacia adentro.
+> ### ⚠️ Si medís el tablero y contás 50, y en la configuración ves 43, **la configuración NO está mal**
+>
+> Son dos cosas distintas y hay que tenerlas separadas en la cabeza.
 
-El valor nominal es **50 × 50 celdas de 20 mm** (1000 × 1000 mm), pero **es un
-valor a confirmar**. Si los marcadores quedan a 3 cm de cada borde, la cancha
-real pasa a ser de unas 47 × 47 celdas.
+**El tablero físico mide 50 × 50 cuadros. La cancha efectiva del sistema es de
+43 × 43 celdas.**
+
+Los marcadores no van en el borde exacto del tablero, sino **hacia adentro**, y
+la cancha del sistema es el área **entre sus centros**. En esta cancha eso da
+43 × 43 cuadros = **860 × 860 mm**. Los 7 cuadros restantes —3,5 por lado— son
+el margen donde están pegados los marcadores.
+
+**Ese margen es borde muerto: no se usa para nada.** Las zonas de acopio, la
+salida, los cubos y los robots viven todos dentro del área de 43 × 43.
+
+```
+   ┌───────────────────────────────────────────────┐ ← tablero físico: 50 × 50 cuadros
+   │        margen muerto: 3,5 cuadros por lado    │
+   │    ▣ ─────────────────────────────────── ▣    │ ← marcadores ID 0 y ID 1
+   │    │                                     │    │
+   │    │      CANCHA EFECTIVA: 43 × 43       │    │ ← 860 × 860 mm entre centros
+   │    │      todo el juego vive acá         │    │
+   │    │                                     │    │
+   │    ▣ ─────────────────────────────────── ▣    │ ← marcadores ID 3 e ID 2
+   │                                               │
+   └───────────────────────────────────────────────┘
+```
+
+| Número | Qué es | Se usa para |
+|---|---|---|
+| **50 × 50 cuadros** | el tablero físico impreso | nada del sistema |
+| **43 × 43 celdas** | entre centros de marcadores | **todo**: coordenadas, zonas, cubos, robots |
+| 7 cuadros | margen donde van pegados los marcadores | borde muerto |
+
+**Medido y verificado** el 4 de agosto de 2026, contando cuadros entre centros
+en las dos dimensiones. Antes la configuración decía 50 —un valor nominal sin
+confirmar— y eso hacía que **todas las coordenadas publicadas salieran un 16,5 %
+estiradas**, sin ningún error que lo delatara. Lo detectó
+`vision/tools/precision_ubicacion.py`, que reportaba 233 mm sobre
+desplazamientos reales de 200 mm.
+
+## 3b. Si montás OTRA cancha: cómo medirla
+
+El número 43 vale para **esta** cancha. Con otro tablero o los marcadores
+pegados en otro lado, va a ser otro, y hay que medirlo igual:
 
 ### Después del montaje:
 
-1. Medir la distancia **entre centros de marcadores**, en milímetros, en los dos
-   ejes.
-2. Dividir por 20 mm para obtener el número de celdas.
+1. Contar los **cuadros de la cuadrícula entre los centros** de los marcadores,
+   en los dos ejes. Contar es exacto y no necesita regla: cada cuadro son 20 mm.
+2. Verificarlo con cinta métrica: cuadros × 20 mm tiene que dar esa distancia.
 3. Actualizar `cols` y `rows` en **los dos** archivos de configuración:
    - [`vision/config_vision.json`](vision/config_vision.json) → `tablero`
    - [`contrato/config_simulador.json`](contrato/config_simulador.json) → `grid`

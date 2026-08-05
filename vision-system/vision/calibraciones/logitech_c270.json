@@ -1,0 +1,47 @@
+{
+  "nombre": "logitech_c270",
+  "camara": "Logitech C270",
+  "fecha": "2026-08-04 15:52",
+  "resolucion": {
+    "ancho": 1280,
+    "alto": 720
+  },
+  "modelo": "estandar",
+  "matriz_camara": [
+    [
+      1468.6155163324336,
+      0.0,
+      667.5917553234109
+    ],
+    [
+      0.0,
+      1467.8499676261047,
+      344.43484520901836
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "coeficientes_distorsion": [
+    0.10100591317398462,
+    0.3815197239933302,
+    -0.00536688175426584,
+    -7.033000115522948e-05,
+    -3.472599044804036
+  ],
+  "rms_px": 0.20563706399961654,
+  "vistas": 15,
+  "patron": {
+    "columnas_internas": 13,
+    "filas_internas": 6,
+    "lado_mm": 25.0
+  },
+  "campo_vision_grados": {
+    "horizontal": 47.09,
+    "vertical": 27.56,
+    "diagonal": 53.14
+  },
+  "desplazamiento_borde_px": 3.8
+}

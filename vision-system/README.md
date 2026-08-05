@@ -391,26 +391,26 @@ completo, el mismo que aparece en [`contrato/CONTRATO.md`](contrato/CONTRATO.md)
   "seq": 4137,
   "ts_ms": 1785012345678,
   "phase": "RUNNING",
-  "grid": { "cols": 50, "rows": 50, "cell_mm": 20.0 },
+  "grid": { "cols": 43, "rows": 43, "cell_mm": 20.0 },
   "rovers": [
     { "id": 10, "col": 4.302,  "row": 3.705,  "theta": 46.20, "age_ms": 0 },
-    { "id": 11, "col": 18.265, "row": 33.661, "theta": 40.22, "age_ms": 0 }
+    { "id": 11, "col": 15.265, "row": 28.661, "theta": 40.22, "age_ms": 0 }
   ],
   "cubes": [
-    { "color": "green", "col": 29.968, "row": 11.999, "age_ms": 0   },
-    { "color": "blue",  "col": 18.000, "row": 34.000, "age_ms": 425 },
-    { "color": "red",   "col": 38.071, "row": 29.983, "age_ms": 0   }
+    { "color": "green", "col": 25.968, "row": 9.999,  "age_ms": 0   },
+    { "color": "blue",  "col": 15.000, "row": 29.000, "age_ms": 425 },
+    { "color": "red",   "col": 33.071, "row": 25.983, "age_ms": 0   }
   ],
   "obstacles": [
-    { "col": 24.968, "row": 25.011, "age_ms": 0 },
-    { "col": 12.014, "row": 19.952, "age_ms": 0 },
-    { "col": 35.946, "row": 17.951, "age_ms": 0 }
+    { "col": 21.468, "row": 21.511, "age_ms": 0 },
+    { "col": 10.014, "row": 16.952, "age_ms": 0 },
+    { "col": 30.946, "row": 14.951, "age_ms": 0 }
   ],
   "start":  { "col": 2.5, "row": 2.5 },
   "depots": [
-    { "color": "green", "col": 47.5, "row": 2.5  },
-    { "color": "blue",  "col": 2.5,  "row": 47.5 },
-    { "color": "red",   "col": 47.5, "row": 47.5 }
+    { "color": "green", "col": 40.5, "row": 2.5  },
+    { "color": "blue",  "col": 2.5,  "row": 40.5 },
+    { "color": "red",   "col": 40.5, "row": 40.5 }
   ]
 }
 ```
