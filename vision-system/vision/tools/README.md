@@ -4,6 +4,11 @@
 parte del flujo de publicación: nada de lo que hay acá se ejecuta durante una
 ronda.
 
+> **¿Vas a poner a punto una cámara?** El procedimiento en orden, paso a paso,
+> está en [`PUESTA_A_PUNTO.md`](../../PUESTA_A_PUNTO.md). Este README es la
+> **referencia** de cada herramienta —qué hace, todas sus opciones y por qué
+> está hecha así—; aquel es el **instructivo**.
+
 ## Lo que ya existe
 
 ### `verificar_geometria.py`

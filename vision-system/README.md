@@ -252,6 +252,7 @@ Vision-Rover-Challenge/              # raíz del repositorio (fork de CENFOTEC)
 └── vision-system/                   # ◄── TODO nuestro trabajo vive acá
     ├── README.md                    # este documento
     ├── MONTAJE.md                   # guía para armar la cancha física
+    ├── PUESTA_A_PUNTO.md            # guía para dejar lista una cámara
     ├── CLAUDE.md                    # las reglas del proyecto
     ├── .gitignore
     │
@@ -571,36 +572,22 @@ Para ver la imagen que generó:
 
 ### Poner a punto una cámara real
 
-Estas cuatro herramientas trabajan con hardware. El orden **no es arbitrario**:
-cada una supone que la anterior salió bien.
+Cuatro etapas —diagnóstico, impresión del patrón, calibración de distorsión y
+medición de precisión—, en un orden que no es arbitrario: cada una supone que
+la anterior salió bien.
 
-```bash
-# 1. ¿La cámara sirve? fps reales, qué ajustes aceptó, si ve los 4 marcadores.
-.venv/bin/python -m vision.tools.diagnostico_camara
-.venv/bin/python -m vision.tools.diagnostico_camara --listar   # ¿qué cámaras hay?
+**El procedimiento completo, paso a paso, está en
+[`PUESTA_A_PUNTO.md`](PUESTA_A_PUNTO.md)**, escrito para alguien que recibe la
+cámara sin conocer el sistema. Los comandos exactos viven ahí y **solo ahí**,
+para que no haya dos secuencias que puedan desincronizarse.
 
-# 2. Imprimir el patrón de calibración, AL 100 %, y verificarlo con su regla.
-.venv/bin/python -m vision.tools.patron_calibracion --salida patron.pdf
+Acá quedan los enlaces según lo que necesites:
 
-# 3. Medir la distorsión del lente. El nombre define a qué perfil va: cada
-#    cámara guarda el suyo, así calibrar una no pisa la calibración de otra.
-.venv/bin/python -m vision.tools.calibrar_camara --camara "Logitech C270"
-.venv/bin/python -m vision.tools.calibrar_camara --verificar   # mirarlo con los ojos
-
-# 4. ¿Ubica con error aceptable? Se mide sobre el tablero real, con un marcador
-#    de prueba que también hay que imprimir.
-.venv/bin/python -m vision.tools.patron_calibracion --marcador-prueba 20
-.venv/bin/python -m vision.tools.precision_ubicacion --camara "Logitech C270"
-.venv/bin/python -m vision.tools.precision_ubicacion --comparar   # tabla de cámaras
-```
-
-El detalle de cada una —qué patrón elegir, cómo leer el semáforo del error, qué
-hacer cuando avisa que el perfil no corresponde a la cámara— está en
-[`vision/tools/README.md`](vision/tools/README.md).
-
-> **Antes de la número 4 la cancha tiene que estar montada**, porque la
-> precisión se mide sobre la cuadrícula real y necesita ver los cuatro
-> marcadores de esquina. Ver [`MONTAJE.md`](MONTAJE.md).
+| Si querés… | Andá a |
+|---|---|
+| **Hacerlo**: los pasos, los comandos, qué mirar en pantalla | [`PUESTA_A_PUNTO.md`](PUESTA_A_PUNTO.md) |
+| **Consultar** una herramienta: todas sus opciones y su porqué | [`vision/tools/README.md`](vision/tools/README.md) |
+| **Entender** cómo funciona la corrección por dentro | [`vision/geometry/README.md`](vision/geometry/README.md) |
 
 ---
 
@@ -654,6 +641,10 @@ ubica bien, así que la cámara se puede elegir por disponibilidad y precio.
 - **Si vas a trabajar en el sistema de visión:** leé
   [`CLAUDE.md`](CLAUDE.md), que fija las reglas del proyecto, y después el
   `README.md` de la carpeta que vayas a tocar.
+- **Si te dieron una cámara y tenés que dejarla lista:** leé
+  **[`PUESTA_A_PUNTO.md`](PUESTA_A_PUNTO.md)**. Te lleva de la mano desde
+  imprimir las hojas hasta saber con cuántos milímetros de error ubica tu
+  cámara. No hace falta que sepas nada del sistema por dentro.
 - **Si vas a montar la cancha física:** leé **[`MONTAJE.md`](MONTAJE.md)**. Tiene
   la disposición exacta de los marcadores, la regla del margen blanco y una
   comprobación para hacer antes de la primera ronda. Pegar los marcadores en otro

@@ -225,6 +225,11 @@ Cuando la cancha esté montada y la cámara puesta:
 
 ## Referencias
 
+- **Con la cancha ya montada, el paso siguiente es dejar la cámara lista:**
+  [`PUESTA_A_PUNTO.md`](PUESTA_A_PUNTO.md). Ahí está el procedimiento completo
+  —imprimir el patrón, calibrar la distorsión y medir la precisión—, incluida
+  la comprobación con cinta del paso 4 de acá arriba, que la herramienta de
+  precisión hace sola y con más cuidado.
 - Las reglas completas del proyecto: [`CLAUDE.md`](CLAUDE.md), sección 5.
 - Cómo el sistema usa los marcadores:
   [`vision/geometry/README.md`](vision/geometry/README.md).
