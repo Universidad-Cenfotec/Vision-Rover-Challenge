@@ -30,6 +30,37 @@ marcadores no probaría nada. Corre en dos modos, con y sin inclinación de
 cámara, y devuelve código de salida distinto de cero si algún grupo se pasa del
 umbral.
 
+### `verificar_rovers.py`
+
+Verifica la **detección de rovers** contra la misma verdad conocida: genera
+imágenes con rovers en celdas y ángulos que el generador sabe, los detecta y
+compara. Reporta error de **posición** (celdas y mm) y de **orientación**
+(grados), con máximo, promedio y umbral.
+
+```bash
+python -m vision.tools.verificar_rovers
+python -m vision.tools.verificar_rovers --salida /tmp/rovers.png --anotar
+python -m vision.tools.verificar_rovers --umbral-mm 5 --umbral-grados 2
+```
+
+Corre cuatro escenarios en los dos modos de cámara:
+
+| Escenario | Qué pone a prueba |
+|---|---|
+| Los dos rovers de la configuración | el caso de todos los días |
+| Cinco rovers repartidos | que cada rover se corresponde con **su** ID |
+| Ángulos en el borde del círculo | el salto de 359° a 0° |
+| Barrido cada 10° | que el ángulo está bien en todo el círculo |
+
+La prueba de identidad no se conforma con que los errores sean chicos: exige que
+**cada rover esté más cerca de su propia verdad que de la de cualquier otro**.
+Dos rovers que se intercambiaran el ID podrían tener errores individuales
+razonables y estar todo mal.
+
+El escenario del salto angular imprime, al lado, la **resta ingenua** y la
+diferencia bien calculada, para que se vea el problema en vez de tener que
+creerlo.
+
 ### `diagnostico_camara.py`
 
 Responde si la cámara sirve tal cual o hay algo que resolver. Abre la webcam,
