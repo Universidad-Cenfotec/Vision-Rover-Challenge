@@ -62,7 +62,9 @@ import numpy as np
 
 try:  # como paquete
     from ..configuracion import CONFIG_POR_DEFECTO, cargar_config
-    from ..geometry.coordenadas import ErrorGeometria, construir_sistema, detectar_marcadores
+    from ..geometry.coordenadas import (
+        ErrorGeometria, centro_de, construir_sistema, detectar_marcadores,
+    )
     from ..geometry.distorsion import (
         ErrorCalibracion, FuenteRectificada, Rectificador, comparar_con_camara, elegir_perfil,
     )
@@ -71,7 +73,7 @@ try:  # como paquete
 except ImportError:  # como script suelto
     from vision.configuracion import CONFIG_POR_DEFECTO, cargar_config  # type: ignore[no-redef]
     from vision.geometry.coordenadas import (  # type: ignore[no-redef]
-        ErrorGeometria, construir_sistema, detectar_marcadores,
+        ErrorGeometria, centro_de, construir_sistema, detectar_marcadores,
     )
     from vision.geometry.distorsion import (  # type: ignore[no-redef]
         ErrorCalibracion, FuenteRectificada, Rectificador, comparar_con_camara, elegir_perfil,
@@ -186,12 +188,17 @@ class Medicion:
 
 
 def _posicion_marcador(imagen, cfg, id_prueba):
-    """Detecta el marcador de prueba y devuelve su centro en píxeles, o None."""
+    """Detecta el marcador de prueba y devuelve su centro en píxeles, o None.
+
+    El centro sale de `centro_de`, que cruza las diagonales. Antes se promediaban
+    las cuatro esquinas acá mismo, que bajo perspectiva está sesgado: el sesgo
+    depende de dónde caiga el marcador en el cuadro, así que **no se cancela** al
+    restar las dos posiciones de una medición, que es de lo que vive esta prueba.
+    """
     detectados = detectar_marcadores(imagen, cfg.marcadores_esquina.nombre_diccionario)
     if id_prueba not in detectados:
         return None, detectados
-    esquinas = detectados[id_prueba]
-    return esquinas.reshape(4, 2).mean(axis=0), detectados
+    return np.array(centro_de(detectados[id_prueba]), dtype=np.float64), detectados
 
 
 def capturar_posicion(fuente, cfg, id_prueba, muestras, tiempo_max=8.0):

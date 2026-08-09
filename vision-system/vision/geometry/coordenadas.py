@@ -111,14 +111,57 @@ def detectar_marcadores(imagen: np.ndarray, nombre_diccionario: str) -> dict[int
     }
 
 
-def centro_de(esquinas: np.ndarray) -> tuple[float, float]:
-    """Centro de un marcador: el promedio de sus cuatro esquinas.
+def _cruz(a: np.ndarray, b: np.ndarray) -> float:
+    """Producto cruz de dos vectores 2D: el escalar `ax*by - ay*bx`.
 
-    Promediar las cuatro reparte el ruido de detección en vez de confiar en una
-    sola esquina.
+    A mano y no con `np.cross` porque en NumPy 2 el caso de dos dimensiones está
+    deprecado, y son dos multiplicaciones.
     """
-    c = np.asarray(esquinas, dtype=np.float64).reshape(4, 2).mean(axis=0)
-    return (float(c[0]), float(c[1]))
+    return float(a[0] * b[1] - a[1] * b[0])
+
+
+def centro_de(esquinas: np.ndarray) -> tuple[float, float]:
+    """Centro de un marcador: la **intersección de sus dos diagonales**.
+
+    Por qué no el promedio de las cuatro esquinas
+    ---------------------------------------------
+    Porque bajo perspectiva **está sesgado**. El promedio es una operación afín,
+    y la proyección en perspectiva no lo es: el promedio de las cuatro esquinas
+    *proyectadas* no es la proyección del centro. Cuando la cámara mira el
+    tablero con algo de ángulo, el lado del marcador que quedó más lejos se ve
+    más chico, y el promedio se corre hacia el lado que se ve más grande.
+
+    La intersección de las diagonales, en cambio, **sí se conserva**: una
+    proyección manda rectas en rectas, así que manda las diagonales del cuadrado
+    en las diagonales del cuadrilátero visto, y su punto de cruce en el punto de
+    cruce. Es exacto, no una aproximación mejor.
+
+    El sesgo crece con el tamaño del marcador —cuanta más superficie, más
+    perspectiva a lo ancho de la propia marca— y por eso apareció recién al
+    alinear el generador sintético con los marcadores reales de 100 mm: con los
+    60 mm nominales de antes quedaba escondido bajo el ruido. Es un error de la
+    cancha física, no del dibujo.
+
+    Sigue usando las cuatro esquinas, así que sigue repartiendo el ruido de
+    detección en vez de confiar en una sola.
+    """
+    p = np.asarray(esquinas, dtype=np.float64).reshape(4, 2)
+    # Diagonales del cuadrilátero: TL->BR y TR->BL. Las esquinas vienen en el
+    # orden TL, TR, BR, BL, que es el que devuelve OpenCV.
+    origen_a, direccion_a = p[0], p[2] - p[0]
+    origen_b, direccion_b = p[1], p[3] - p[1]
+
+    denominador = _cruz(direccion_a, direccion_b)
+    if abs(denominador) < 1e-12:
+        # Diagonales paralelas: el cuadrilátero está degenerado (marcador visto
+        # de canto, o una detección rota). No hay punto de cruce que devolver,
+        # así que se cae al promedio, que al menos siempre existe.
+        c = p.mean(axis=0)
+        return (float(c[0]), float(c[1]))
+
+    t = _cruz(origen_b - origen_a, direccion_b) / denominador
+    centro = origen_a + t * direccion_a
+    return (float(centro[0]), float(centro[1]))
 
 
 def construir_sistema(imagen: np.ndarray, cfg: ConfigVision) -> SistemaCoordenadas:

@@ -370,6 +370,30 @@ Se usa el **centro** de cada marcador —no una esquina— porque es lo único q
 puede medir sin ambigüedad, tanto en una imagen como con una cinta métrica sobre
 la cancha.
 
+### Por qué el centro sale de cruzar las diagonales
+
+Parece un detalle y no lo es. El centro de un marcador **no** es el promedio de
+sus cuatro esquinas: es el **cruce de sus dos diagonales**.
+
+Promediar es una operación afín, y mirar algo en perspectiva no lo es. Cuando la
+cámara mira el tablero con algo de ángulo, el lado del marcador que quedó más
+lejos se ve más chico, y el promedio de las cuatro esquinas se corre hacia el
+lado que se ve más grande. El cruce de las diagonales, en cambio, **se conserva**:
+una proyección manda rectas en rectas, así que manda las diagonales del cuadrado
+impreso en las diagonales del cuadrilátero que se ve, y su punto de cruce en el
+punto de cruce.
+
+El sesgo **crece con el tamaño del marcador** —cuanta más superficie, más
+perspectiva a lo ancho de la propia marca—, y por eso apareció recién al poner en
+el generador sintético los marcadores de **100 mm** reales: con los 60 mm
+nominales de antes quedaba escondido bajo el ruido. Medido con la cámara
+inclinada, el centro se corría **1,37 px**; cruzando las diagonales quedan
+**0,41 px**. Con más inclinación la diferencia se abre: a 0,30 son **7,4 px
+contra 0,6**.
+
+Importa porque esos cuatro centros son los que definen **todo** el sistema de
+coordenadas: un sesgo ahí no afecta a un objeto, los corre a todos.
+
 ### Por qué tres zonas de acopio, una por color
 
 Hay **tres cubos**, de colores distintos (verde, azul, rojo), y **tres zonas de
@@ -604,7 +628,7 @@ va engrosando. Así siempre hay algo que funciona y se puede verificar.
 | **El contrato** (`contrato/`) | Formato definido, validador, simulador con patologías reales, cliente de referencia y manual completo. Protocolo **v1**. |
 | **Generador sintético** (`vision/sources/`) | Crea imágenes del tablero con marcadores y rovers, **conociendo la verdad** de lo que dibujó. |
 | **Captura real** (`vision/sources/`) | Lee la webcam USB en un hilo propio que **nunca bloquea**, con exposición, enfoque y balance de blancos fijos —y **verificados por efecto**, porque muchas cámaras aceptan el ajuste y siguen haciendo lo que quieren—. Incluye un menú para elegir qué cámara abrir. |
-| **Geometría de esquinas** (`vision/geometry/`) | Detecta los 4 marcadores y convierte píxeles a celdas. Verificado contra la verdad del generador sintético: exacto con la cámara cenital y **0,44 mm** de error máximo con la cámara inclinada. |
+| **Geometría de esquinas** (`vision/geometry/`) | Detecta los 4 marcadores y convierte píxeles a celdas. Verificado contra la verdad del generador sintético, con los marcadores de **100 mm** reales: **exacto** con la cámara cenital y **0,44 mm** de error máximo con la cámara inclinada. El centro de cada marcador sale de **cruzar sus diagonales** y no de promediar sus esquinas (ver más abajo). |
 | **Calibración de distorsión** (`vision/geometry/`) | Corrige la curvatura del lente gran angular. **Dos cámaras ya calibradas y verificadas**: ArgomTech CAM40 (1920×1080, 0,314 px) y Logitech C270 (1280×720, 0,206 px). |
 | **Perfiles por cámara** (`vision/geometry/`) | Cada aparato guarda su propia calibración, y el sistema **avisa cuando el perfil no le corresponde** a la cámara conectada, en vez de corregir mal en silencio. |
 | **Herramientas de puesta a punto** (`vision/tools/`) | Seis: diagnóstico de cámara, generación de los PDF para imprimir, calibración, verificación visual, verificación de geometría y medición de precisión. |
