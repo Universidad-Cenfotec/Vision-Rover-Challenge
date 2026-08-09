@@ -169,9 +169,11 @@ está construido hasta la mitad:
 | Paso | Estado |
 |---|---|
 | ① captura · ② rectificación · ③ píxeles→celdas | ✅ **escritos y verificados** |
-| ④ detectores · ⑤ seguimiento · ⑥ estado del mundo · ⑦ consumidores | ⚪ todavía no existen |
+| ④ detectores — **rovers** | ✅ **escrito y verificado** |
+| ④ detectores — cubos y obstáculos por color | ⚪ todavía no existe |
+| ⑤ seguimiento · ⑥ estado del mundo · ⑦ consumidores | ⚪ todavía no existen |
 
-Las tres primeras etapas existen como **piezas sueltas y probadas**, pero
+Las etapas ya hechas existen como **piezas sueltas y probadas**, pero
 **todavía no hay un programa que las encadene**: se ejercitan desde las
 herramientas de `vision/tools/`, no desde un bucle de producción. El detalle
 pieza por pieza está en la [sección 9](#9-estado-actual-del-proyecto).
@@ -280,7 +282,9 @@ Vision-Rover-Challenge/              # raíz del repositorio (fork de CENFOTEC)
         │   ├── distorsion.py        #   corrección del lente + perfiles de cámara
         │   └── coordenadas.py       #   sistema de coordenadas por marcadores
         │
-        ├── detectors/               # productor: qué hay y dónde        (vacío)
+        ├── detectors/               # productor: qué hay y dónde
+        │   └── rovers.py            #   rovers por su marcador: celda y ángulo
+        │
         ├── tracking/                # productor: identidad y oclusión   (vacío)
         ├── publish/                 # consumidor: a la red              (vacío)
         ├── record/                  # consumidor: a disco               (vacío)
@@ -291,6 +295,7 @@ Vision-Rover-Challenge/              # raíz del repositorio (fork de CENFOTEC)
         │   ├── calibrar_camara.py       # mide la distorsión del lente
         │   ├── precision_ubicacion.py   # ¿ubica con error aceptable?
         │   ├── verificar_geometria.py   # coordenadas contra verdad conocida
+        │   ├── verificar_rovers.py      # rovers contra verdad conocida
         │   └── panel.py                 # el panel que dibujan las demás
         │
         ├── calibraciones/           # DATOS: un perfil por cámara calibrada
@@ -631,7 +636,8 @@ va engrosando. Así siempre hay algo que funciona y se puede verificar.
 | **Geometría de esquinas** (`vision/geometry/`) | Detecta los 4 marcadores y convierte píxeles a celdas. Verificado contra la verdad del generador sintético, con los marcadores de **100 mm** reales: **exacto** con la cámara cenital y **0,44 mm** de error máximo con la cámara inclinada. El centro de cada marcador sale de **cruzar sus diagonales** y no de promediar sus esquinas (ver más abajo). |
 | **Calibración de distorsión** (`vision/geometry/`) | Corrige la curvatura del lente gran angular. **Dos cámaras ya calibradas y verificadas**: ArgomTech CAM40 (1920×1080, 0,314 px) y Logitech C270 (1280×720, 0,206 px). |
 | **Perfiles por cámara** (`vision/geometry/`) | Cada aparato guarda su propia calibración, y el sistema **avisa cuando el perfil no le corresponde** a la cámara conectada, en vez de corregir mal en silencio. |
-| **Herramientas de puesta a punto** (`vision/tools/`) | Seis: diagnóstico de cámara, generación de los PDF para imprimir, calibración, verificación visual, verificación de geometría y medición de precisión. |
+| **Detección de rovers** (`vision/detectors/`) | Encuentra los rovers por su marcador y deduce su **celda y su ángulo**, calculados en celdas y no en píxeles porque la perspectiva no conserva los ángulos. Verificado contra la verdad del generador: **0,8 mm** de error de posición y **1,3°** de orientación con la cámara inclinada, sobre 36 rovers repartidos. |
+| **Herramientas de puesta a punto** (`vision/tools/`) | Siete: diagnóstico de cámara, generación de los PDF para imprimir, calibración, verificación visual, verificación de geometría, verificación de rovers y medición de precisión. |
 
 **Precisión medida sobre hardware real.** El criterio era **error máximo por
 debajo de 10 mm** —un cubo mide 60 mm, así que 10 mm mantiene el objetivo dentro
@@ -650,7 +656,7 @@ ubica bien, así que la cámara se puede elegir por disponibilidad y precio.
 | Pieza | Qué falta |
 |---|---|
 | **Corrección de paralaje** (`geometry/`) | Los objetos altos se ven corridos hacia afuera; hay que compensarlo con la altura conocida. Ya se sabe **cuánto pesa** —la herramienta de precisión lo mide y lo descuenta—, pero todavía no es una etapa del flujo. |
-| **Detección de rovers** (`detectors/`) | Encontrar los rovers por su marcador y deducir su orientación. |
+| **Desfases marcador ↔ robot** (`detectors/`) | La estructura está y verificada, pero los dos desfases están **en cero**: el marcador está corrido del centro de giro del robot real y el frente son las paletas. Se miden con el propio sistema haciendo girar el robot en el lugar. |
 | **Detección de color** (`detectors/`) | Cubos y obstáculos por color, segmentando por saturación. |
 | **Seguimiento** (`tracking/`) | Identidad entre cuadros, oclusión y edad. |
 | **Publicación** (`publish/`) | Emitir el estado del mundo por TCP. Hoy solo lo hace el simulador. |

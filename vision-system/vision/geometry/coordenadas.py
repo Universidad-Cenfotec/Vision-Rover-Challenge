@@ -164,14 +164,25 @@ def centro_de(esquinas: np.ndarray) -> tuple[float, float]:
     return (float(centro[0]), float(centro[1]))
 
 
-def construir_sistema(imagen: np.ndarray, cfg: ConfigVision) -> SistemaCoordenadas:
+def construir_sistema(
+    imagen: np.ndarray,
+    cfg: ConfigVision,
+    detectados: dict[int, np.ndarray] | None = None,
+) -> SistemaCoordenadas:
     """Establece el sistema de coordenadas de la cancha a partir de una imagen.
 
     Exige los cuatro marcadores de esquina. Con tres no alcanza: una homografía
     necesita cuatro correspondencias, y con menos habría que suponer cosas sobre
     la cámara que no queremos suponer.
+
+    `detectados` permite pasarle una detección ya hecha sobre ESTA misma imagen.
+    Sirve para el bucle de proceso, que necesita los mismos marcadores para dos
+    cosas —armar las coordenadas y encontrar los rovers— y no tiene por qué
+    correr el detector de ArUco dos veces sobre el mismo cuadro. Si no se pasa,
+    detecta por su cuenta, que es lo que hace falta para usarlo suelto.
     """
-    detectados = detectar_marcadores(imagen, cfg.marcadores_esquina.nombre_diccionario)
+    if detectados is None:
+        detectados = detectar_marcadores(imagen, cfg.marcadores_esquina.nombre_diccionario)
     esperados = cfg.marcadores_esquina.ids_esperados
     faltantes = sorted(esperados - set(detectados))
     if faltantes:

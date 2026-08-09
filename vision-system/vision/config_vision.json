@@ -85,6 +85,29 @@
     }
   },
 
+  "deteccion_rovers": {
+    "_acerca_de": "Detección de rovers a partir de su marcador ArUco (vision/detectors/rovers.py). Qué marcador es un rover NO se declara acá: es rover todo marcador que NO sea una esquina de `marcadores_esquina.disposicion`. Así la regla no se rompe si mañana las esquinas fueran otras, y no hay una lista de IDs de rover que mantener sincronizada con la realidad.",
+
+    "ids_ignorados": [],
+    "_nota_ids_ignorados": "IDs que hay que descartar aunque no sean esquinas. Arranca VACÍO a propósito: descartar en silencio un marcador que sí es un rover es peor que reportar uno de más, que al menos se ve. El caso concreto para el que existe esta lista es el marcador ID 20 de la prueba de precisión (precision.id_marcador_prueba): existe físicamente, y si queda olvidado sobre la cancha se publica como si fuera un rover. Si eso llega a pasar, poner [20] acá.",
+
+    "desfase_marcador_a_centro_mm": {
+      "adelante": 0.0,
+      "izquierda": 0.0
+    },
+    "desfase_angular_grados": 0.0,
+
+    "_QUE_SON_LOS_DESFASES": "El marcador NO está en el centro de rotación del robot, y su orientación NO es necesariamente la del frente del robot (las paletas). Lo que se detecta es la pose del MARCADOR; lo que el contrato publica es la pose del ROBOT. Estos dos desfases son el puente entre una y otra.",
+
+    "_POR_QUE_ADELANTE_E_IZQUIERDA_Y_NO_COL_Y_ROW": "Porque el desfase es solidario al ROBOT y el robot gira. Un vector guardado como (col, row) sería válido para una sola orientación: apenas el robot girara 90 grados apuntaría a cualquier lado. Guardado como adelante/izquierda —el marco del propio robot— vale para toda orientación, y el detector lo rota por el ángulo detectado antes de sumarlo.",
+
+    "_CONVENCION": "El vector va DEL centro del marcador AL centro de rotación. `adelante` positivo = el centro de rotación queda hacia las paletas (marcador montado hacia atrás). `izquierda` positiva = hacia la izquierda del robot. `desfase_angular_grados` es el ángulo que hay que sumarle a la orientación del marcador para obtener la del frente del robot, positivo antihorario, misma convención que el contrato.",
+
+    "_ESTADO": "⚠️ LOS TRES EN CERO — TODAVÍA SIN MEDIR. En cero, la pose del robot es idéntica a la del marcador. NO es que el robot real no tenga desfase: lo tiene, el marcador está corrido del centro de giro y el frente son las paletas. Es que todavía no se midió. La estructura está lista para recibir los valores reales sin tocar código.",
+
+    "_COMO_SE_VAN_A_MEDIR": "Con el propio sistema, una vez que la detección funcione. (1) DESFASE DE POSICIÓN: hacer girar el robot SOBRE SU EJE, sin desplazarse, y mirar la posición que reporta la visión. Si el marcador estuviera justo sobre el centro de rotación, el punto reportado se quedaría quieto; como está corrido, describe una CIRCUNFERENCIA. El radio de esa circunferencia es el módulo del desfase y el centro de la circunferencia es el centro de rotación real. La dirección se lee en el marco del marcador, donde es constante durante todo el giro, y de ahí salen `adelante` e `izquierda`. (2) DESFASE ANGULAR: apoyar las paletas contra una línea conocida de la cuadrícula y restarle a ese ángulo el que reporta el marcador. Es el sistema midiéndose a sí mismo, que es lo que lo hace verificable sin instrumental aparte."
+  },
+
   "paralaje": {
     "_acerca_de": "Corrección de PARALAJE. ⚠️ ESTA ETAPA TODAVÍA NO ESTÁ CONSTRUIDA: está planificada en vision/geometry/ y hoy no hay código que lea este bloque. Los valores se registran de antemano, ya medidos y marcados con su estado, para que cuando se escriba la etapa no tenga que inventarlos ni incrustarlos.",
 

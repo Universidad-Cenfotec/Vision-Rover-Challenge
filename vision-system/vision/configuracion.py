@@ -137,6 +137,47 @@ class Elementos:
 
 
 @dataclass(frozen=True, slots=True)
+class DesfaseMarcadorRobot:
+    """Vector del centro del MARCADOR al centro de rotación del ROBOT.
+
+    Va en el marco del robot —adelante y a la izquierda— y no en coordenadas de
+    la cancha, porque el desfase es solidario al robot y el robot gira: un
+    `(col, row)` fijo solo sería correcto para una orientación.
+
+    `adelante` positivo apunta hacia las paletas; `izquierda` positiva, hacia la
+    izquierda del robot.
+    """
+
+    adelante_mm: float
+    izquierda_mm: float
+
+    @property
+    def es_nulo(self) -> bool:
+        """Si los dos son cero, la pose del robot es la del marcador."""
+        return self.adelante_mm == 0.0 and self.izquierda_mm == 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class DeteccionRovers:
+    """Cómo se pasa de marcadores detectados a rovers.
+
+    Qué marcador es un rover no está declarado como lista: **es rover todo el
+    que no sea una esquina**. Una lista de IDs de rover habría que mantenerla
+    sincronizada con los marcadores que se peguen de verdad, y el día que no lo
+    esté, un rover deja de existir sin que nada avise.
+
+    Los desfases arrancan en cero, que hace que la pose del robot sea idéntica a
+    la del marcador. No es que el robot real no tenga desfase —lo tiene—: es que
+    todavía no se midió. Se van a medir con el propio sistema haciendo girar el
+    robot en el lugar; el procedimiento está en las notas de `config_vision.json`.
+    """
+
+    ids_ignorados: frozenset[int]
+    desfase_posicion: DesfaseMarcadorRobot
+    desfase_angular_grados: float
+
+
+@dataclass(frozen=True, slots=True)
 class Paralaje:
     """Alturas para la corrección de paralaje. ETAPA TODAVÍA NO CONSTRUIDA.
 
@@ -309,6 +350,7 @@ class ConfigVision:
     tablero: Tablero
     marcadores_esquina: MarcadoresEsquina
     elementos: Elementos
+    deteccion_rovers: DeteccionRovers
     paralaje: Paralaje
     sintetico: Sintetico
     camara: Camara
@@ -460,6 +502,18 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
     )
 
     elementos = _leer_elementos(d["elementos"])
+
+    dr = d["deteccion_rovers"]
+    desf = dr["desfase_marcador_a_centro_mm"]
+    deteccion_rovers = DeteccionRovers(
+        ids_ignorados=frozenset(int(i) for i in dr["ids_ignorados"]),
+        desfase_posicion=DesfaseMarcadorRobot(
+            adelante_mm=float(desf["adelante"]),
+            izquierda_mm=float(desf["izquierda"]),
+        ),
+        desfase_angular_grados=float(dr["desfase_angular_grados"]),
+    )
+
     paralaje = Paralaje(
         altura_marcador_rover_mm=float(d["paralaje"]["altura_marcador_rover_mm"])
     )
@@ -495,6 +549,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         tablero=tablero,
         marcadores_esquina=marcadores,
         elementos=elementos,
+        deteccion_rovers=deteccion_rovers,
         paralaje=paralaje,
         sintetico=sintetico,
         camara=camara,
@@ -557,6 +612,19 @@ def revisar_config(cfg: ConfigVision) -> str | None:
             "NO es opcional: sin él el marcador no se detecta".format(
                 mr.lado_con_blanco_mm, mr.espacio_ancho_mm, mr.espacio_alto_mm
             )
+        )
+    dr = cfg.deteccion_rovers
+    chocan_esquina = sorted(dr.ids_ignorados & cfg.marcadores_esquina.ids_esperados)
+    if chocan_esquina:
+        return (
+            "deteccion_rovers.ids_ignorados contiene {}, que son marcadores de ESQUINA. "
+            "Las esquinas ya quedan afuera de los rovers por definición; ponerlas acá "
+            "sugiere una confusión sobre para qué sirve la lista".format(chocan_esquina)
+        )
+    if not (-360.0 <= dr.desfase_angular_grados <= 360.0):
+        return (
+            "deteccion_rovers.desfase_angular_grados = {} está fuera de [-360, 360]; "
+            "es un ángulo, no una cantidad de vueltas".format(dr.desfase_angular_grados)
         )
     if cfg.paralaje.altura_marcador_rover_mm <= 0:
         return (
