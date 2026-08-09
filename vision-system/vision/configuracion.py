@@ -55,14 +55,106 @@ class MarcadoresEsquina:
     (CLAUDE.md, sección 5). El orden de los otros tres es horario y es una
     REGLA DE MONTAJE FÍSICO: si se pegan en otro orden, todas las coordenadas
     salen rotadas o espejadas.
+
+    `lado_mm` y `borde_blanco_mm` son la medida del marcador FÍSICO impreso. No
+    entran en el cálculo de coordenadas —eso lo define el centro de cada
+    marcador, que no depende de su tamaño—: dicen qué hay que imprimir y desde
+    qué distancia se lo puede detectar de forma estable.
     """
 
     nombre_diccionario: str
     disposicion: dict[int, tuple[float, float]]
+    lado_mm: float
+    borde_blanco_mm: float
 
     @property
     def ids_esperados(self) -> frozenset[int]:
         return frozenset(self.disposicion)
+
+
+@dataclass(frozen=True, slots=True)
+class Cubos:
+    """Medidas físicas de los cubos. CONFIRMADAS.
+
+    Los va a consumir la detección de color (`detectors/`), que todavía no
+    existe: `lado_mm` dice qué tamaño de mancha es plausible, y `colores` en qué
+    clases hay que clasificar. El color es la identidad del cubo en el contrato
+    —no hay dos del mismo—, y el amarillo está reservado para los obstáculos.
+
+    La altura del cubo no es un campo aparte: es su lado, porque es un cubo.
+    """
+
+    lado_mm: float
+    colores: tuple[str, ...]
+
+    @property
+    def altura_mm(self) -> float:
+        """La altura que va a descontar la corrección de paralaje."""
+        return self.lado_mm
+
+
+@dataclass(frozen=True, slots=True)
+class MarcadorRover:
+    """Marcador ArUco pegado al robot. ⚠️ TAMAÑO PROVISIONAL.
+
+    `lado_mm` y `borde_blanco_mm` son una **propuesta sin verificar**: 40 + 5 + 5
+    suman los 50 mm del lado corto del espacio disponible en el robot, así que
+    entra justo. Falta comprobar que un marcador de 40 mm se detecte de forma
+    **estable** desde la Logitech C270 a 2,1 m de altura, y esa prueba se hará
+    cuando la cámara esté montada a su altura de trabajo.
+
+    Si no alcanza, el lado largo del espacio (70 mm) admite 60 mm de negro con
+    sus 5 mm de blanco por lado.
+
+    La **altura** a la que va montado no está acá sino en `Paralaje`, que es la
+    etapa que la consume.
+    """
+
+    lado_mm: float
+    borde_blanco_mm: float
+    espacio_ancho_mm: float
+    espacio_alto_mm: float
+
+    @property
+    def lado_con_blanco_mm(self) -> float:
+        """Lo que ocupa el marcador impreso, blanco incluido."""
+        return self.lado_mm + 2 * self.borde_blanco_mm
+
+
+@dataclass(frozen=True, slots=True)
+class Elementos:
+    """Medidas físicas reales de los objetos del reto.
+
+    Se registran antes de que exista quien las use, a propósito: son medidas del
+    mundo, no parámetros de un algoritmo, y no cambian porque cambie el código.
+    Cada una lleva en el JSON su estado —confirmada o provisional—, porque una
+    medida provisional usada como confirmada no da error: da resultados mal en
+    silencio.
+    """
+
+    cubos: Cubos
+    marcador_rover: MarcadorRover
+
+
+@dataclass(frozen=True, slots=True)
+class Paralaje:
+    """Alturas para la corrección de paralaje. ETAPA TODAVÍA NO CONSTRUIDA.
+
+    Un objeto con altura no se ve donde está: se ve corrido hacia afuera,
+    alejándose del punto que está justo debajo de la cámara, tanto más cuanto
+    más alto y más lejos del centro. El tablero y los marcadores de esquina
+    están al ras y no sufren el efecto; los rovers y los cubos sí.
+
+    Acá vive **solo** la altura del marcador del rover, que es la única que no
+    se deduce de ninguna otra medida. La del cubo es su lado (`Cubos.altura_mm`)
+    y la de la cámara **no se configura**: sale de la pose deducida de los
+    cuatro marcadores de esquina.
+
+    No confundir con `Precision.altura_marcador_mm`, que es el espesor del papel
+    del marcador de prueba y sirve para descontar el paralaje de esa medición.
+    """
+
+    altura_marcador_rover_mm: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +308,8 @@ class Precision:
 class ConfigVision:
     tablero: Tablero
     marcadores_esquina: MarcadoresEsquina
+    elementos: Elementos
+    paralaje: Paralaje
     sintetico: Sintetico
     camara: Camara
     calibracion: Calibracion
@@ -250,6 +344,31 @@ def _leer_disposicion(bruto: dict[str, Any], cols: int, rows: int) -> dict[int, 
             )
         salida[int(id_texto)] = _ESQUINAS[nombre](cols, rows)
     return salida
+
+
+def _leer_elementos(d: dict[str, Any]) -> Elementos:
+    """Lee las medidas físicas de los objetos del reto.
+
+    Los estados —confirmado o provisional— viven en las notas del JSON y no como
+    campos: son para quien edita el archivo o escribe la etapa que las va a usar,
+    no algo sobre lo que el código deba ramificar. Un `if provisional` sería una
+    decisión tomada en el lugar equivocado.
+    """
+    c = d["cubos"]
+    r = d["marcador_rover"]
+    espacio = r["espacio_disponible_mm"]
+    return Elementos(
+        cubos=Cubos(
+            lado_mm=float(c["lado_mm"]),
+            colores=tuple(str(color) for color in c["colores"]),
+        ),
+        marcador_rover=MarcadorRover(
+            lado_mm=float(r["lado_mm"]),
+            borde_blanco_mm=float(r["borde_blanco_mm"]),
+            espacio_ancho_mm=float(espacio["ancho"]),
+            espacio_alto_mm=float(espacio["alto"]),
+        ),
+    )
 
 
 def _leer_ajuste(d: dict[str, Any]) -> Ajuste:
@@ -336,6 +455,13 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
     marcadores = MarcadoresEsquina(
         nombre_diccionario=m["diccionario"],
         disposicion=_leer_disposicion(m["disposicion"], tablero.cols, tablero.rows),
+        lado_mm=float(m["lado_mm"]),
+        borde_blanco_mm=float(m["borde_blanco_mm"]),
+    )
+
+    elementos = _leer_elementos(d["elementos"])
+    paralaje = Paralaje(
+        altura_marcador_rover_mm=float(d["paralaje"]["altura_marcador_rover_mm"])
     )
 
     s = d["sintetico"]
@@ -368,6 +494,8 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
     cfg = ConfigVision(
         tablero=tablero,
         marcadores_esquina=marcadores,
+        elementos=elementos,
+        paralaje=paralaje,
         sintetico=sintetico,
         camara=camara,
         calibracion=calibracion,
@@ -397,6 +525,44 @@ def revisar_config(cfg: ConfigVision) -> str | None:
         )
     if len(set(cfg.marcadores_esquina.disposicion.values())) != 4:
         return "hay dos marcadores de esquina asignados a la misma esquina"
+    if cfg.marcadores_esquina.lado_mm <= 0:
+        return "marcadores_esquina.lado_mm debe ser > 0 (es el tamaño del marcador impreso)"
+    if cfg.marcadores_esquina.borde_blanco_mm <= 0:
+        return (
+            "marcadores_esquina.borde_blanco_mm debe ser > 0: sin zona blanca alrededor "
+            "el detector de ArUco no encuentra el marcador"
+        )
+    cub = cfg.elementos.cubos
+    if cub.lado_mm <= 0:
+        return "elementos.cubos.lado_mm debe ser > 0"
+    if not cub.colores:
+        return "elementos.cubos.colores: hace falta al menos un color"
+    if len(set(cub.colores)) != len(cub.colores):
+        return (
+            "elementos.cubos.colores tiene colores repetidos: el color ES la identidad "
+            "del cubo, así que no puede haber dos del mismo"
+        )
+    if "yellow" in cub.colores:
+        return (
+            "elementos.cubos.colores incluye 'yellow', que está RESERVADO para los "
+            "obstáculos: un objeto amarillo nunca es un cubo"
+        )
+    mr = cfg.elementos.marcador_rover
+    if mr.lado_mm <= 0 or mr.borde_blanco_mm <= 0:
+        return "elementos.marcador_rover: lado_mm y borde_blanco_mm deben ser > 0"
+    if mr.lado_con_blanco_mm > min(mr.espacio_ancho_mm, mr.espacio_alto_mm):
+        return (
+            "elementos.marcador_rover: el marcador con su borde blanco mide {:.0f} mm y no "
+            "entra en el espacio disponible del robot ({:.0f} x {:.0f} mm). El borde blanco "
+            "NO es opcional: sin él el marcador no se detecta".format(
+                mr.lado_con_blanco_mm, mr.espacio_ancho_mm, mr.espacio_alto_mm
+            )
+        )
+    if cfg.paralaje.altura_marcador_rover_mm <= 0:
+        return (
+            "paralaje.altura_marcador_rover_mm debe ser > 0: es la altura del marcador "
+            "sobre el tablero, y con 0 no habría paralaje que corregir"
+        )
     ids_rover = [r.id for r in cfg.rovers_demo]
     if len(set(ids_rover)) != len(ids_rover):
         return "hay rovers de demostración con el mismo ID de marcador"
@@ -408,6 +574,24 @@ def revisar_config(cfg: ConfigVision) -> str | None:
         return "el margen no deja lugar para el tablero dentro de la imagen"
     if s.borde_blanco_celdas <= 0:
         return "borde_blanco_celdas debe ser > 0: sin zona blanca el detector no ve los marcadores"
+    # Los marcadores de esquina están centrados EN la esquina, así que sobresalen
+    # media marca más su borde blanco hacia afuera de la cancha. Si eso no entra
+    # en el margen, el borde de la imagen le come el blanco y el detector deja de
+    # encontrarlos: la prueba fallaría por el encuadre y no por lo que se quería
+    # probar, que es el peor tipo de falla porque parece un error de geometría.
+    ppc = min(
+        (s.ancho_px - 2 * s.margen_px) / cfg.tablero.cols,
+        (s.alto_px - 2 * s.margen_px) / cfg.tablero.rows,
+    )
+    vuelo_celdas = s.lado_marcador_esquina_celdas / 2.0 + s.borde_blanco_celdas
+    if vuelo_celdas * ppc > s.margen_px:
+        return (
+            "sintetico.margen_px = {} no alcanza: los marcadores de esquina sobresalen "
+            "{:.1f} celdas ≈ {:.0f} px hacia afuera de la cancha (media marca más su borde "
+            "blanco) y quedarían recortados contra el borde de la imagen".format(
+                s.margen_px, vuelo_celdas, vuelo_celdas * ppc
+            )
+        )
     if not (0.0 <= s.perspectiva.inclinacion < 0.5):
         return "perspectiva.inclinacion debe estar en [0, 0.5)"
     c = cfg.camara

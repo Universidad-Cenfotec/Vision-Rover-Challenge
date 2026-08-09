@@ -90,12 +90,23 @@ al ras del borde del tablero, tapado por una cinta, o pegado justo contra una
 zona oscura, el detector no ve ese contraste y **el marcador sencillamente no
 existe** para el sistema.
 
-**Cuánto margen:** como referencia, la configuración del proyecto usa un borde
-blanco de aproximadamente **un 20 % del lado del marcador** por cada costado. Un
-marcador de 6 cm de lado lleva algo más de 1 cm de blanco alrededor.
+**Cuánto margen:** la regla es **un 20 % del lado del marcador** por cada
+costado. Las medidas concretas de esta cancha:
+
+| Marcador | Lado (negro) | Blanco por costado | Total impreso |
+|---|---|---|---|
+| **De esquina** (los cuatro) | **100 mm** | **20 mm** | 140 × 140 mm |
+| **Del rover** | 40 mm | 5 mm | 50 × 50 mm |
 
 Esto aplica a **todos** los marcadores: los cuatro de esquina y los de los
 rovers.
+
+> **El marcador del rover todavía es provisional.** Los 40 mm salen del espacio
+> disponible en el robot (50 × 70 mm) y **falta comprobar** que se detecte de
+> forma estable desde la cámara montada a 2,1 m. Si no alcanza, hay lugar para
+> 60 mm usando el lado largo. Las dos medidas viven en
+> [`vision/config_vision.json`](vision/config_vision.json), cada una con su
+> estado; ahí manda la configuración y no este documento.
 
 ### Al pegar, verificar que cada marcador:
 

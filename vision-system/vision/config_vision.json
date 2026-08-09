@@ -18,6 +18,11 @@
   "marcadores_esquina": {
     "diccionario": "DICT_4X4_50",
 
+    "lado_mm": 100.0,
+    "borde_blanco_mm": 20.0,
+    "_MEDIDA_CONFIRMADA": "Marcador impreso de 100 x 100 mm de negro, con 20 mm de blanco por lado. Confirmado el 9-ago-2026 sobre los marcadores reales. Los 20 mm son el 20 % del lado, que es la regla de margen blanco de MONTAJE.md.",
+    "_nota_para_que_sirve_el_tamano": "El tamaño NO interviene en el cálculo de coordenadas: eso lo define el CENTRO de cada marcador, que no cambia si el marcador es más grande o más chico. Sí decide dos cosas prácticas: qué hay que imprimir, y desde qué distancia y con qué resolución se lo puede detectar de forma estable. Por eso se registra acá y no se deduce de nada.",
+
     "_REGLA_DE_MONTAJE_FISICO": "⚠️ ESTO NO ES SOLO CÓDIGO: ES LA INSTRUCCIÓN DE CÓMO PEGAR LOS MARCADORES EN LA CANCHA. Si se pegan en otro orden, TODAS las coordenadas salen rotadas o espejadas y nada de lo que publique la visión va a tener sentido. Antes de pegar, leer esto y verificarlo dos veces. La guía completa de montaje, con la comprobación previa a la primera ronda, está en vision-system/MONTAJE.md.",
 
     "_DISPOSICION_EN_LA_CANCHA": [
@@ -49,18 +54,66 @@
     "_nota_disposicion": "Nombres en vez de números para que la disposición no se rompa al cambiar cols/rows. origen=(0,0), fin_col=(cols,0), diagonal=(cols,rows), fin_row=(0,rows)."
   },
 
+  "elementos": {
+    "_acerca_de": "Medidas físicas REALES de los objetos del reto, medidas sobre los objetos mismos. Todavía no las consume nadie: las van a necesitar etapas que aún no existen —detección de color y detección de rovers, en detectors/—. Se registran ahora, como datos, para que esas etapas no nazcan con números incrustados en el código.",
+
+    "_ESTADOS": "Cada medida declara si está CONFIRMADA (verificada sobre el objeto real) o PROVISIONAL (todavía por verificar). La distinción no es burocrática: una medida provisional usada como si estuviera confirmada no produce ningún error, produce resultados mal EN SILENCIO. Antes de apoyarse en un valor de este bloque hay que mirar su estado.",
+
+    "cubos": {
+      "lado_mm": 60.0,
+      "colores": ["red", "green", "blue"],
+      "_ESTADO": "CONFIRMADO (9-ago-2026). Cubos de 60 mm de lado, uno de cada color.",
+      "_nota_altura": "Es un cubo, así que su altura ES su lado: 60 mm. Esa altura la va a necesitar la corrección de paralaje, que la lee de acá (ver el bloque `paralaje`). No se repite como campo aparte para que no puedan quedar dos números distintos diciendo lo mismo.",
+      "_nota_colores": "El color ES la identidad del cubo en el contrato v1: no hay dos del mismo color, por eso los cubos no llevan ID. Son los mismos tres colores de los depots declarados en contrato/config_simulador.json, y cada cubo va al depot de su color. El AMARILLO está reservado para los obstáculos: un objeto amarillo nunca es un cubo.",
+      "_nota_para_que_sirve": "La detección de color (detectors/, todavía no existe) va a segmentar por saturación y clasificar en espacio Lab. `lado_mm` le dice qué tamaño de mancha es plausible para un cubo; `colores` le dice en qué clases tiene que clasificar."
+    },
+
+    "marcador_rover": {
+      "lado_mm": 40.0,
+      "borde_blanco_mm": 5.0,
+      "espacio_disponible_mm": { "ancho": 50.0, "alto": 70.0 },
+
+      "_ESTADO": "⚠️ PROVISIONAL — TODAVÍA NO VERIFICADO. Estos dos números son una PROPUESTA, no una medición: 40 mm de negro + 5 mm de blanco por lado suman 50 mm, que es exactamente el lado corto del espacio disponible en el robot (50 x 70 mm). Entra justo, y por eso hay que comprobarlo antes de mandar a imprimir veinte robots.",
+
+      "_QUE_FALTA_VERIFICAR": "Que un marcador de 40 mm se detecte de forma ESTABLE —cuadro tras cuadro, sin parpadear, y en toda la cancha, no solo bajo la cámara— desde la Logitech C270 montada a 2,1 m de altura. La prueba se hará cuando la cámara esté montada a su altura de trabajo; hasta entonces este tamaño no está confirmado.",
+
+      "_SI_NO_ALCANZA": "Si a 40 mm la detección no resulta estable, hay margen sin cambiar el robot: usando el LADO LARGO del espacio disponible entran 60 mm de negro + 5 mm de blanco por lado dentro de los 70 mm. Las otras salidas son subir la resolución de la cámara o bajarla de altura, las dos más caras que agrandar un papel.",
+
+      "_nota_altura": "La ALTURA a la que va montado este marcador (90 mm sobre el tablero) NO está acá: está en el bloque `paralaje`, que es la etapa que la consume. Ver la nota de aquel bloque.",
+
+      "_nota_identidad": "El ID de este marcador es la identidad del rover en el contrato: los dos robots son negros e idénticos y solo el marcador los distingue. Los IDs 0-3 están reservados para las esquinas."
+    }
+  },
+
+  "paralaje": {
+    "_acerca_de": "Corrección de PARALAJE. ⚠️ ESTA ETAPA TODAVÍA NO ESTÁ CONSTRUIDA: está planificada en vision/geometry/ y hoy no hay código que lea este bloque. Los valores se registran de antemano, ya medidos y marcados con su estado, para que cuando se escriba la etapa no tenga que inventarlos ni incrustarlos.",
+
+    "_QUE_PROBLEMA_RESUELVE": "Un objeto que tiene ALTURA no se ve donde está: se ve corrido hacia AFUERA, alejándose del punto que está justo debajo de la cámara. Cuanto más alto el objeto y más lejos del centro, más corrido. Sin corregirlo, el rover se publica varios milímetros fuera de su posición real, y el error crece hacia los bordes de la cancha. La cancha, los marcadores de esquina y las líneas de la cuadrícula están al ras del tablero y no sufren el efecto; los rovers y los cubos sí.",
+
+    "altura_marcador_rover_mm": 90.0,
+    "_ESTADO_altura_marcador_rover": "CONFIRMADO (9-ago-2026). Es la altura desde la superficie del tablero hasta el plano donde está pegado el marcador ArUco del rover. ÉSTE es el dato que la corrección de paralaje necesita para el rover: lo que se detecta en la imagen es el marcador, no el robot, así que la altura que importa es la del marcador y no la del chasis.",
+
+    "_nota_altura_de_los_cubos": "Para los cubos la altura no se declara acá: es su lado, 60 mm, que ya está en elementos.cubos.lado_mm. Un solo número, un solo lugar.",
+
+    "_nota_altura_de_camara": "La altura de la cámara NO se configura: se DEDUCE de la pose de cámara que sale de los cuatro marcadores de esquina (CLAUDE.md, sección 5). Declararla a mano sería pedir un dato que el sistema ya sabe medir, y que además cambiaría cada vez que se remonte la cámara sin que nadie se acuerde de actualizar el archivo.",
+
+    "_NO_CONFUNDIR_CON_PRECISION": "El bloque `precision` tiene su propio `altura_marcador_mm`, que vale 0.2 y es OTRA COSA: es el espesor del papel del marcador de prueba, y sirve para descontar el paralaje de ESA medición. Este bloque es para el sistema en producción, que publica posiciones ABSOLUTAS, donde el paralaje no se cancela solo."
+  },
+
   "sintetico": {
     "_acerca_de": "Generador de imágenes sintéticas de prueba. NO es el simulador de contrato/: aquel emite posiciones en JSON, este dibuja imágenes del tablero para que el sistema de visión las procese, conociendo la verdad de lo que dibujó.",
 
     "ancho_px": 1280,
     "alto_px": 1280,
-    "margen_px": 80,
+    "margen_px": 120,
     "_nota_tamano": "El lado de celda en píxeles se DERIVA de estos tres valores para que la grilla entre en la imagen, y el tablero queda centrado. Así el tamaño de imagen es lo configurable y no hay que ajustar dos números coherentes entre sí.",
+    "_nota_margen": "El margen tiene que dar lugar a los marcadores de esquina COMPLETOS con su zona blanca: están centrados EN la esquina, así que sobresalen media marca más el borde blanco hacia afuera de la cancha. Con marcadores de 5 celdas y 1 de blanco, eso son 3,5 celdas ≈ 85 px, y por eso el margen subió de 80 a 120. Si se recorta la zona blanca contra el borde de la imagen, el detector deja de encontrar el marcador y la prueba falla por una razón que no tiene nada que ver con lo que se quería probar. `revisar_config` lo comprueba.",
 
-    "lado_marcador_esquina_celdas": 3.0,
-    "lado_marcador_rover_celdas": 4.0,
-    "borde_blanco_celdas": 0.6,
-    "_nota_borde_blanco": "Zona blanca obligatoria alrededor de cada marcador. Sin ella el detector de ArUco no encuentra el marcador: necesita contraste contra el fondo en todo el contorno. En la cancha real hay que respetarlo igual al imprimir y pegar.",
+    "lado_marcador_esquina_celdas": 5.0,
+    "lado_marcador_rover_celdas": 2.0,
+    "borde_blanco_celdas": 1.0,
+    "_MEDIDAS_TOMADAS_DE_LA_REALIDAD": "Estos tres valores son las medidas físicas reales convertidas a celdas de 20 mm: esquina 100 mm = 5 celdas (marcadores_esquina.lado_mm), rover 40 mm = 2 celdas (elementos.marcador_rover.lado_mm, PROVISIONAL), blanco 20 mm = 1 celda (marcadores_esquina.borde_blanco_mm). Antes decían 3,0 / 4,0 / 0,6, que eran valores nominales de cuando no se había medido nada: dibujaban un tablero que no se parecía al real, y el generador sintético existe justamente para probar contra la realidad. Están escritos en celdas y no en mm porque es lo que el generador dibuja; si cambia una medida física, hay que actualizarlos acá también.",
+    "_nota_borde_blanco": "Zona blanca obligatoria alrededor de cada marcador. Sin ella el detector de ArUco no encuentra el marcador: necesita contraste contra el fondo en todo el contorno. En la cancha real hay que respetarlo igual al imprimir y pegar. OJO: el generador usa UN SOLO valor de borde para los dos tipos de marcador, y está puesto en el del marcador de esquina (20 mm). El del rover es más chico en la realidad (5 mm), así que en la imagen sintética el rover lleva más blanco del que va a tener en la cancha. Es la diferencia conservadora: la prueba no se vuelve más fácil por el lado del marcador chico, que es el que está en duda.",
 
     "color_fondo": 235,
     "color_grilla": 215,
