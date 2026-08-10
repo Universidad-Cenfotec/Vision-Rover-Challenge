@@ -103,9 +103,55 @@
 
     "_CONVENCION": "El vector va DEL centro del marcador AL centro de rotación. `adelante` positivo = el centro de rotación queda hacia las paletas (marcador montado hacia atrás). `izquierda` positiva = hacia la izquierda del robot. `desfase_angular_grados` es el ángulo que hay que sumarle a la orientación del marcador para obtener la del frente del robot, positivo antihorario, misma convención que el contrato.",
 
-    "_ESTADO": "⚠️ LOS TRES EN CERO — TODAVÍA SIN MEDIR. En cero, la pose del robot es idéntica a la del marcador. NO es que el robot real no tenga desfase: lo tiene, el marcador está corrido del centro de giro y el frente son las paletas. Es que todavía no se midió. La estructura está lista para recibir los valores reales sin tocar código.",
+    "_ESTADO": "⚠️ LOS DOS EN CERO, pero por razones DISTINTAS: uno por medición confirmada y el otro todavía pendiente. La diferencia importa y por eso van separados abajo. En cero, la pose del robot es idéntica a la del marcador.",
+
+    "_ESTADO_desfase_angular": "✅ MEDIDO Y CONFIRMADO ≈ 0 (9-ago-2026, robot real, marcador ID 10, con vision/tools/medir_desfases.py). Dos sesiones independientes, de cuatro orientaciones cada una, dieron +0,18° y −0,50°, con dispersión de ~1°. O sea: el marcador está alineado con el frente del robot dentro de ±1°, que es el propio ruido de la medición. Se deja en cero DELIBERADAMENTE: un grado no cambia la navegación. Este método —alinear las paletas con la cuadrícula y declarar el rumbo— NO depende de que el robot gire en el lugar, y por eso su resultado vale aunque la medición de posición no haya salido.",
+
+    "_ESTADO_desfase_posicion": "⚠️ TODAVÍA NO MEDIDO. Se intentó dos veces el 9-ago-2026 y la herramienta RECHAZÓ las dos con veredicto INSUFICIENTE: el robot SE TRASLADÓ mientras giraba, entre 6 y 12 cm. Con eso el modelo de giro puro no se cumple y el radio que devuelve el ajuste no mide el desfase: mide qué tan bien un círculo explica una nube que no es un círculo. Los dos intentos dieron 10,7 ± 6,9 mm y 1,8 ± 4,5 mm, que NO coinciden entre sí. Lo único que se puede afirmar hoy es que el desfase es menor que unos 10 mm —el umbral de precisión del sistema—, NO que sea despreciable. Se deja en cero porque es el mejor valor disponible, no porque esté verificado.",
+
+    "_COMO_CERRAR_EL_DESFASE_DE_POSICION": "Hace falta un giro sobre el eje DE VERDAD: las dos ruedas en sentidos opuestos y a la misma velocidad, no un pivote sobre una rueda ni empujarlo a mano. Durante la captura, la herramienta ahora avisa en vivo si el robot se está trasladando, comparando el tamaño de la nube de puntos con el círculo que va ajustando: si el marcador está casi centrado, la nube tiene que quedar como una manchita de pocos milímetros; si se pasea por la pantalla, hay traslación y conviene parar y reintentar. Las sesiones crudas de los dos intentos fallidos quedaron en vision/mediciones/desfases_rover10_*.json, guardadas a propósito: documentan un intento fallido con su motivo.",
+
+    "_SI_SE_CAMBIA_EL_ROBOT": "Estas mediciones valen para ESTE robot con SU marcador pegado donde está hoy. Si se cambia el robot, se despega o se remonta el marcador, las dos hay que rehacerlas: no son propiedades del sistema de visión sino de un aparato concreto.",
 
     "_COMO_SE_VAN_A_MEDIR": "Con el propio sistema, una vez que la detección funcione. (1) DESFASE DE POSICIÓN: hacer girar el robot SOBRE SU EJE, sin desplazarse, y mirar la posición que reporta la visión. Si el marcador estuviera justo sobre el centro de rotación, el punto reportado se quedaría quieto; como está corrido, describe una CIRCUNFERENCIA. El radio de esa circunferencia es el módulo del desfase y el centro de la circunferencia es el centro de rotación real. La dirección se lee en el marco del marcador, donde es constante durante todo el giro, y de ahí salen `adelante` e `izquierda`. (2) DESFASE ANGULAR: apoyar las paletas contra una línea conocida de la cuadrícula y restarle a ese ángulo el que reporta el marcador. Es el sistema midiéndose a sí mismo, que es lo que lo hace verificable sin instrumental aparte."
+  },
+
+  "medicion_desfases": {
+    "_acerca_de": "Parámetros de la herramienta que MIDE los dos desfases marcador-robot (vision/tools/medir_desfases.py). No los aplica: los mide y los muestra para que una persona los revise y los ponga en `deteccion_rovers`. Es el sistema midiéndose a sí mismo.",
+
+    "muestras_objetivo": 24,
+    "muestras_minimas": 12,
+    "_nota_muestras": "Cuántas posiciones capturar mientras el robot gira. El ruido de cada muestra se promedia como 1/raíz(N): con ruido de 1 mm por muestra, 24 muestras dejan el centro en ±0,2 mm. 24 sobre una vuelta completa es una muestra cada 15 grados.",
+
+    "paso_angular_grados": 12.0,
+    "_nota_paso": "Cuánto tiene que haber girado el marcador desde la última muestra aceptada para tomar una nueva. Evita gastar muestras en el mismo punto: veinte capturas del mismo ángulo no son veinte muestras, son una.",
+
+    "arco_minimo_grados": 180.0,
+    "arco_recomendado_grados": 270.0,
+    "arco_inaceptable_grados": 120.0,
+    "_NOTA_ARCO": "EL PARÁMETRO MÁS IMPORTANTE. Con un arco corto, separar el centro de giro del desfase es un problema mal condicionado: el error del centro se amplifica por 1/(1-cos(arco/2)). A 360 y 180 grados la amplificación es 1; a 90 grados es 3,4; a 45 grados es 13; a 20 grados es 66 y la medición no sirve para nada. Por debajo de `arco_inaceptable_grados` la herramienta SE NIEGA a dar un resultado, en vez de dar uno malo que parece bueno. Entre el mínimo y el recomendado, avisa que el número es flojo. Lo ideal es una vuelta completa.",
+
+    "cuadros_por_muestra": 15,
+    "_nota_cuadros": "Cuadros de video a promediar en cada muestra. Una sola lectura mezclaría el temblor de la detección con lo que se quiere medir.",
+
+    "estabilidad_celdas": 0.05,
+    "pausa_s": 0.5,
+    "_nota_captura_automatica": "Para capturar sin que haya que tocar el teclado con las manos en el robot: se gira, se suelta, y la herramienta captura sola cuando el marcador se quedó quieto. `estabilidad_celdas` es cuánto se puede mover entre cuadros para considerarlo quieto (0,05 celdas = 1 mm); `pausa_s` es cuánto tiene que sostener esa quietud. Mismo patrón que la captura automática de calibrar_camara.py.",
+
+    "orientaciones_objetivo": 4,
+    "_nota_orientaciones": "Cuántas orientaciones distintas usar para el desfase angular. Cuatro, a 0/90/180/270 grados, reparten cualquier error de alineación en vez de arrastrarlo. El promedio va por MEDIA CIRCULAR: promediar 359 y 1 a secas da 180, que es el revés de la respuesta.",
+
+    "radio_minimo_mm": 3.0,
+    "_nota_radio_minimo": "Si el marcador está prácticamente sobre el centro de giro, el radio es comparable al ruido y LA DIRECCIÓN NO EXISTE: cualquier ángulo ajusta igual de bien. Por debajo de este radio la herramienta recomienda dejar el desfase en cero en vez de inventar una dirección.",
+
+    "residuo_bueno_mm": 1.5,
+    "residuo_aceptable_mm": 3.0,
+    "_nota_residuo": "Cuánto se apartan las muestras del modelo de giro puro. Es un diagnóstico FÍSICO antes que numérico: si el robot se TRASLADA mientras gira, la trayectoria deja de ser un círculo y el residuo se dispara. Un residuo alto casi siempre significa que el robot se movió del lugar, no que la matemática falló.",
+
+    "acuerdo_metodos_mm": 1.0,
+    "_nota_acuerdo": "Cuánto pueden discrepar el radio del ajuste lineal y el del ajuste de círculo de Kåsa. Son dos matemáticas independientes sobre los mismos datos: el lineal usa la orientación medida además de la posición, el de Kåsa solo las posiciones. Que coincidan es la salvaguarda de un número que después va a corregir TODAS las posiciones publicadas.",
+
+    "carpeta_mediciones": "mediciones"
   },
 
   "paralaje": {

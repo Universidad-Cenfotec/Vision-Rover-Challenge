@@ -178,6 +178,36 @@ class DeteccionRovers:
 
 
 @dataclass(frozen=True, slots=True)
+class MedicionDesfases:
+    """Parámetros de la herramienta que mide los desfases marcador ↔ robot.
+
+    Mide y muestra; **no aplica**. Los valores medidos los revisa una persona y
+    los pone en `deteccion_rovers`, porque un número que va a corregir todas las
+    posiciones publicadas no se escribe solo.
+
+    El parámetro que decide si la medición sirve es `arco_minimo_grados`:
+    separar el centro de giro del desfase es un problema mal condicionado cuando
+    el robot gira poco, y el error se amplifica por `1/(1−cos(arco/2))`.
+    """
+
+    muestras_objetivo: int
+    muestras_minimas: int
+    paso_angular_grados: float
+    arco_minimo_grados: float
+    arco_recomendado_grados: float
+    arco_inaceptable_grados: float
+    cuadros_por_muestra: int
+    estabilidad_celdas: float
+    pausa_s: float
+    orientaciones_objetivo: int
+    radio_minimo_mm: float
+    residuo_bueno_mm: float
+    residuo_aceptable_mm: float
+    acuerdo_metodos_mm: float
+    carpeta_mediciones: str
+
+
+@dataclass(frozen=True, slots=True)
 class Paralaje:
     """Alturas para la corrección de paralaje. ETAPA TODAVÍA NO CONSTRUIDA.
 
@@ -351,6 +381,7 @@ class ConfigVision:
     marcadores_esquina: MarcadoresEsquina
     elementos: Elementos
     deteccion_rovers: DeteccionRovers
+    medicion_desfases: MedicionDesfases
     paralaje: Paralaje
     sintetico: Sintetico
     camara: Camara
@@ -514,6 +545,25 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         desfase_angular_grados=float(dr["desfase_angular_grados"]),
     )
 
+    md = d["medicion_desfases"]
+    medicion_desfases = MedicionDesfases(
+        muestras_objetivo=int(md["muestras_objetivo"]),
+        muestras_minimas=int(md["muestras_minimas"]),
+        paso_angular_grados=float(md["paso_angular_grados"]),
+        arco_minimo_grados=float(md["arco_minimo_grados"]),
+        arco_recomendado_grados=float(md["arco_recomendado_grados"]),
+        arco_inaceptable_grados=float(md["arco_inaceptable_grados"]),
+        cuadros_por_muestra=int(md["cuadros_por_muestra"]),
+        estabilidad_celdas=float(md["estabilidad_celdas"]),
+        pausa_s=float(md["pausa_s"]),
+        orientaciones_objetivo=int(md["orientaciones_objetivo"]),
+        radio_minimo_mm=float(md["radio_minimo_mm"]),
+        residuo_bueno_mm=float(md["residuo_bueno_mm"]),
+        residuo_aceptable_mm=float(md["residuo_aceptable_mm"]),
+        acuerdo_metodos_mm=float(md["acuerdo_metodos_mm"]),
+        carpeta_mediciones=str(md["carpeta_mediciones"]),
+    )
+
     paralaje = Paralaje(
         altura_marcador_rover_mm=float(d["paralaje"]["altura_marcador_rover_mm"])
     )
@@ -550,6 +600,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         marcadores_esquina=marcadores,
         elementos=elementos,
         deteccion_rovers=deteccion_rovers,
+        medicion_desfases=medicion_desfases,
         paralaje=paralaje,
         sintetico=sintetico,
         camara=camara,
@@ -626,6 +677,23 @@ def revisar_config(cfg: ConfigVision) -> str | None:
             "deteccion_rovers.desfase_angular_grados = {} está fuera de [-360, 360]; "
             "es un ángulo, no una cantidad de vueltas".format(dr.desfase_angular_grados)
         )
+    m = cfg.medicion_desfases
+    if m.muestras_minimas < 3:
+        return (
+            "medicion_desfases.muestras_minimas: con menos de 3 muestras el ajuste "
+            "tiene tantas incógnitas como ecuaciones y no hay nada que promediar"
+        )
+    if m.muestras_objetivo < m.muestras_minimas:
+        return "medicion_desfases.muestras_objetivo no puede ser menor que muestras_minimas"
+    if not (0.0 < m.arco_inaceptable_grados <= m.arco_minimo_grados <= m.arco_recomendado_grados <= 360.0):
+        return (
+            "medicion_desfases: los arcos tienen que cumplir "
+            "0 < inaceptable <= mínimo <= recomendado <= 360"
+        )
+    if m.paso_angular_grados <= 0:
+        return "medicion_desfases.paso_angular_grados debe ser > 0"
+    if m.orientaciones_objetivo < 1:
+        return "medicion_desfases.orientaciones_objetivo debe ser >= 1"
     if cfg.paralaje.altura_marcador_rover_mm <= 0:
         return (
             "paralaje.altura_marcador_rover_mm debe ser > 0: es la altura del marcador "

@@ -61,6 +61,111 @@ El escenario del salto angular imprime, al lado, la **resta ingenua** y la
 diferencia bien calculada, para que se vea el problema en vez de tener que
 creerlo.
 
+### `medir_desfases.py`
+
+Mide los **dos desfases entre el marcador y el robot** usando el propio sistema
+de visión, sin instrumental aparte. Los muestra listos para pegar en la
+configuración; **no los aplica**.
+
+```bash
+python -m vision.tools.medir_desfases --autoprueba          # sin cámara
+python -m vision.tools.medir_desfases                       # con el robot real
+python -m vision.tools.medir_desfases --metodo-angular avance
+python -m vision.tools.medir_desfases --solo-posicion --desfase-angular 40.2
+```
+
+**Orden: primero el ángulo, después la posición.** El desfase de posición se
+expresa en el marco del robot, y para pasar del marco del marcador al del robot
+hace falta el desfase angular. Por eso `--solo-posicion` exige
+`--desfase-angular`.
+
+#### Desfase de posición: el robot gira sobre su eje
+
+Si el marcador estuviera sobre el centro de rotación, la posición reportada se
+quedaría quieta al girar. Como está corrido, describe una **circunferencia**.
+
+El ajuste **no** es un ajuste de círculo. Un círculo usa solo las posiciones y
+tira la orientación, que también se mide en cada muestra. Usándola, el problema
+es **lineal y de un paso**: `M = C + a·adelante(φ) + i·izquierda(φ)`, cuatro
+incógnitas y dos ecuaciones por muestra. La dirección sale en el mismo paso.
+
+El **círculo de Kåsa se ajusta igual, como control cruzado independiente**: llega
+al radio por un camino que ignora las orientaciones. Que los dos coincidan es la
+salvaguarda de un número que después corrige todas las posiciones publicadas.
+
+| Cuánto gira el robot | Amplificación del error del centro |
+|---|---|
+| 360° / 270° / 180° | ×1,0 |
+| 120° | ×2,0 |
+| 90° | ×3,4 |
+| 45° | ×13,1 |
+| 20° | ×65,8 |
+
+Es `1/(1−cos(arco/2))`, y por eso hay un **mínimo duro**: por debajo de 120° la
+herramienta **se niega a dar un resultado** en vez de dar uno malo con cara de
+bueno. Lo recomendado es una vuelta completa con 24 muestras.
+
+> El arco se mide como **cobertura**, no como `máximo − mínimo`: se resta del
+> círculo el hueco más grande entre muestras consecutivas. Por eso una vuelta
+> completa con muestras cada 15° reporta ~345° y no 360°. Dos muestras en 1° y
+> 359° están **pegadas**, no separadas por 358°.
+
+#### Desfase angular: dos métodos
+
+| Método | Cómo | Precisión |
+|---|---|---|
+| `declarado` (por defecto) | alineás las paletas con una línea de la cuadrícula y declarás el rumbo con `0`/`9`/`8`/`2` | limitada por tu ojo al alinear |
+| `avance` | mandás el robot **derecho** y la visión mide la dirección del desplazamiento | mejor: para un robot diferencial la dirección de avance **es** su frente, y la mide el sistema |
+
+Los dos promedian varias orientaciones por **media circular**
+(`atan2(Σ sen, Σ cos)`). Promediar 359° y 1° a secas da 180°, que es el revés de
+la respuesta.
+
+#### El paralaje infla el módulo un 4,5 %
+
+El marcador está a 90 mm del tablero, así que se ve corrido hacia afuera.
+Mientras el robot gira en el lugar, ese efecto es una **homotecia** alrededor del
+punto bajo la cámara: **conserva la dirección y escala el módulo** por
+`H/(H−h)` = 1,045 con la cámara a 2,1 m.
+
+La herramienta reporta **el valor medido y el corregido**, y recomienda el
+corregido. Es el primer consumidor real del bloque `paralaje` de la
+configuración. La altura se pasa con `--altura-camara-mm`.
+
+#### El aviso en vivo: "Giro puro"
+
+Durante la captura, el panel muestra el **tamaño de la nube de puntos** al lado
+del **círculo que el ajuste va estimando**. La comprobación es directa: si el
+desfase vale `r`, la posición del marcador en una vuelta tiene que recorrer un
+círculo de diámetro `2r` **y nada más**. Una nube mucho más grande no es un
+desfase grande: es el robot **desplazándose mientras gira**.
+
+Si se pone rojo, aparece `EL ROBOT SE ESTÁ TRASLADANDO — pará y reintentá`, y
+también sale por consola con los dos números.
+
+Usa **los mismos umbrales** que el veredicto final: un aviso en vivo que juzgara
+con otro criterio sería peor que no tenerlo, porque diría "vas bien" y después
+reprobaría. Existe por dos sesiones perdidas del 9-ago-2026, donde eso se supo
+al terminar de capturar; reproduciéndolas, el aviso habría saltado en la muestra
+**15 de 24** y **16 de 22**. Sobre un giro limpio no da ninguna falsa alarma.
+
+#### El residuo es un diagnóstico físico
+
+El modelo supone giro **puro**. Si el robot se traslada mientras gira, el residuo
+se dispara. Un residuo alto casi nunca significa "la matemática falló": significa
+**"el robot se movió del lugar"**, y así se reporta. El veredicto mira el **RMS**
+y no el máximo, porque el máximo lo fija una sola muestra desafortunada —con 24
+siempre hay una— y daría falsas alarmas sobre mediciones sanas.
+
+#### La autoprueba
+
+`--autoprueba` corre **sin cámara**: le inyecta al generador sintético un robot
+con un desfase **conocido** (35 mm adelante, −12 mm a la izquierda, 40° de
+desfase angular), genera las imágenes de un giro y comprueba que el estimador lo
+recupera. La matemática se verifica contra la verdad conocida **antes** de
+apuntarle al robot: si hubiera un signo cambiado, se descubre acá y no con el
+robot en la mano.
+
 ### `diagnostico_camara.py`
 
 Responde si la cámara sirve tal cual o hay algo que resolver. Abre la webcam,

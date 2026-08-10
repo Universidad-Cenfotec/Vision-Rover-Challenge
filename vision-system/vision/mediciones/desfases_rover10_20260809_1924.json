@@ -1,0 +1,162 @@
+{
+  "veredicto": "INSUFICIENTE",
+  "motivos": [
+    {
+      "nivel": "ok",
+      "texto": "arco de 328° sobre 24 muestras"
+    },
+    {
+      "nivel": "malo",
+      "texto": "residuo RMS de 22.74 mm: las muestras no describen un giro puro. Casi seguro el robot SE TRASLADÓ mientras giraba"
+    },
+    {
+      "nivel": "malo",
+      "texto": "los dos métodos discrepan 43.34 mm en el radio (lineal 10.71 vs Kåsa 54.05)"
+    }
+  ],
+  "muestras": 24,
+  "arco_grados": 327.98,
+  "centro_celdas": [
+    22.6106,
+    19.8156
+  ],
+  "radio_lineal_mm": 10.714,
+  "radio_kasa_mm": 54.051,
+  "residuo_max_mm": 98.806,
+  "residuo_rms_mm": 22.736,
+  "altura_camara_mm": 2100.0,
+  "factor_paralaje": 1.04478,
+  "desfase_marcador_a_centro_mm_medido": [
+    3.157,
+    10.239
+  ],
+  "desfase_marcador_a_centro_mm_corregido": [
+    3.021,
+    9.8
+  ],
+  "desfase_angular_grados": 0.18,
+  "dispersion_angular_grados": 0.975,
+  "orientaciones": 4,
+  "muestras_crudas": [
+    {
+      "col": 21.6506,
+      "row": 19.4673,
+      "phi_grados": 195.291
+    },
+    {
+      "col": 21.6676,
+      "row": 19.5857,
+      "phi_grados": 207.151
+    },
+    {
+      "col": 21.8363,
+      "row": 19.6614,
+      "phi_grados": 220.341
+    },
+    {
+      "col": 21.9009,
+      "row": 19.6987,
+      "phi_grados": 237.352
+    },
+    {
+      "col": 21.8896,
+      "row": 19.8261,
+      "phi_grados": 254.233
+    },
+    {
+      "col": 22.0091,
+      "row": 19.8428,
+      "phi_grados": 269.699
+    },
+    {
+      "col": 22.0913,
+      "row": 19.8331,
+      "phi_grados": 291.322
+    },
+    {
+      "col": 22.1387,
+      "row": 19.7881,
+      "phi_grados": 306.273
+    },
+    {
+      "col": 22.2996,
+      "row": 19.8666,
+      "phi_grados": 326.879
+    },
+    {
+      "col": 22.3339,
+      "row": 19.7597,
+      "phi_grados": 339.884
+    },
+    {
+      "col": 22.561,
+      "row": 19.7031,
+      "phi_grados": 355.274
+    },
+    {
+      "col": 22.6461,
+      "row": 19.572,
+      "phi_grados": 14.962
+    },
+    {
+      "col": 22.6467,
+      "row": 19.5518,
+      "phi_grados": 14.844
+    },
+    {
+      "col": 22.7694,
+      "row": 19.5889,
+      "phi_grados": 30.166
+    },
+    {
+      "col": 22.8469,
+      "row": 19.7543,
+      "phi_grados": 54.565
+    },
+    {
+      "col": 24.1805,
+      "row": 24.8256,
+      "phi_grados": 86.582
+    },
+    {
+      "col": 23.122,
+      "row": 19.6926,
+      "phi_grados": 89.923
+    },
+    {
+      "col": 23.2621,
+      "row": 19.5903,
+      "phi_grados": 102.898
+    },
+    {
+      "col": 23.2565,
+      "row": 19.5926,
+      "phi_grados": 103.05
+    },
+    {
+      "col": 23.2829,
+      "row": 19.3967,
+      "phi_grados": 123.866
+    },
+    {
+      "col": 23.3068,
+      "row": 19.4385,
+      "phi_grados": 123.58
+    },
+    {
+      "col": 23.2717,
+      "row": 19.3707,
+      "phi_grados": 145.619
+    },
+    {
+      "col": 23.2642,
+      "row": 19.3545,
+      "phi_grados": 146.191
+    },
+    {
+      "col": 23.4832,
+      "row": 18.8851,
+      "phi_grados": 165.185
+    }
+  ]
+}

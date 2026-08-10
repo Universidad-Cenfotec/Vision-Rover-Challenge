@@ -71,8 +71,16 @@ except ImportError:  # como script suelto
 
 
 def normalizar_grados(angulo: float) -> float:
-    """Lleva cualquier ángulo al rango `[0, 360)` que exige el contrato."""
-    return float(angulo % 360.0)
+    """Lleva cualquier ángulo al rango `[0, 360)` que exige el contrato.
+
+    El redondeo del final no es cosmético: `-1e-15 % 360` da `359.99999999999994`,
+    que está dentro del rango pero **se lee como 360** al imprimirlo con dos
+    decimales. Un cero que se muestra como 360 hace dudar de un resultado
+    correcto, así que los valores a un pelo de la vuelta completa se llevan a
+    cero, que es lo que son.
+    """
+    valor = float(angulo % 360.0)
+    return 0.0 if abs(valor - 360.0) < 1e-9 else valor
 
 
 def diferencia_angular(a: float, b: float) -> float:
