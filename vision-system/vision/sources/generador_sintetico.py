@@ -33,11 +33,14 @@ import cv2
 import numpy as np
 
 try:  # como paquete: python -m vision.sources.generador_sintetico
-    from ..configuracion import ConfigVision, Perspectiva, RoverDemo, diccionario_aruco
+    from ..configuracion import (
+        ConfigVision, CuboDemo, Perspectiva, RoverDemo, diccionario_aruco,
+    )
     from .fuente import Cuadro, ahora_ms
 except ImportError:  # como script suelto
     from vision.configuracion import (  # type: ignore[no-redef]
         ConfigVision,
+        CuboDemo,
         Perspectiva,
         RoverDemo,
         diccionario_aruco,
@@ -230,6 +233,23 @@ class MarcadorVerdad:
         return float(math.hypot(self.col_en_plano - self.col, self.row_en_plano - self.row))
 
 
+@dataclass(frozen=True, slots=True)
+class CuboVerdad:
+    """Dónde puso el generador un cubo. La verdad es el centro de su BASE.
+
+    El centro de la base y no el de la mancha: es lo que el contrato publica y
+    lo que el detector tiene que llegar a deducir. La base está en el piso, así
+    que no la afecta el paralaje.
+    """
+
+    color: str
+    col: float
+    row: float
+    theta_grados: float
+    base_px: tuple[tuple[float, float], ...]
+    tapa_px: tuple[tuple[float, float], ...]
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class VerdadTablero:
     """Todo lo que el generador sabe de la imagen que acaba de crear.
@@ -249,6 +269,7 @@ class VerdadTablero:
     con_perspectiva: bool
     esquinas: tuple[MarcadorVerdad, ...]
     rovers: tuple[MarcadorVerdad, ...]
+    cubos: tuple[CuboVerdad, ...] = ()
 
     @property
     def nadir_celdas(self) -> tuple[float, float]:
@@ -376,6 +397,8 @@ def generar(
     rovers: tuple[RoverDemo, ...] | None = None,
     perspectiva: Perspectiva | None = None,
     semilla: int = 0,
+    cubos: tuple[CuboDemo, ...] | None = None,
+    con_cuerpo: bool = True,
 ) -> tuple[np.ndarray, VerdadTablero]:
     """Dibuja una imagen sintética del tablero y devuelve `(imagen, verdad)`.
 
@@ -387,6 +410,7 @@ def generar(
     t = cfg.tablero
     persp = perspectiva if perspectiva is not None else s.perspectiva
     lista_rovers = cfg.rovers_demo if rovers is None else rovers
+    lista_cubos = cfg.cubos_demo if cubos is None else cubos
 
     inclinacion = persp.inclinacion_grados if persp.activa else 0.0
     camara = camara_para(cfg, inclinacion)
@@ -416,20 +440,37 @@ def generar(
             )
         )
 
-    # --- rovers ------------------------------------------------------------
-    # A su altura REAL sobre el tablero. Antes se dibujaban al ras, que era
-    # cómodo y falso: el marcador del rover está a 90 mm y por lo tanto se ve
-    # corrido. Dibujarlo donde de verdad se ve es lo que permite medir cuánto
-    # cuesta no corregir el paralaje, y verificar la corrección cuando exista.
+    # --- cubos y rovers, de lejos a cerca ----------------------------------
+    # El orden importa: lo que está más cerca de la cámara se dibuja después y
+    # tapa a lo que está detrás. Es el algoritmo del pintor, y es lo que hace
+    # aparecer la OCLUSIÓN sin programarla: un rover empujando un cubo le
+    # esconde la arista de la base porque su chasis está en el rayo, igual que
+    # en la cancha.
     altura_rover = cfg.paralaje.altura_marcador_rover_mm
     marcadores_rover: list[MarcadorVerdad] = []
+    verdad_cubos: list[CuboVerdad] = []
+
+    piezas = []
+    for cubo in lista_cubos:
+        piezas.append((_distancia_a_camara(camara, cubo.col, cubo.row), "cubo", cubo))
     for rover in lista_rovers:
-        marcadores_rover.append(
-            _dibujar_marcador(
-                lienzo, camara, diccionario, rover.id, rover.col, rover.row, rover.theta,
-                s.lado_marcador_rover_celdas, s.borde_blanco_celdas, ppc, altura_rover,
+        piezas.append((_distancia_a_camara(camara, rover.col, rover.row), "rover", rover))
+    piezas.sort(key=lambda x: -x[0])  # el más lejano primero
+
+    for _, tipo, pieza in piezas:
+        if tipo == "cubo":
+            verdad_cubos.append(
+                _dibujar_cubo(lienzo, camara, pieza, cfg.elementos.cubos.lado_mm, s)
             )
-        )
+        else:
+            if con_cuerpo:
+                _dibujar_cuerpo_rover(lienzo, camara, pieza, s.cuerpo_rover)
+            marcadores_rover.append(
+                _dibujar_marcador(
+                    lienzo, camara, diccionario, pieza.id, pieza.col, pieza.row, pieza.theta,
+                    s.lado_marcador_rover_celdas, s.borde_blanco_celdas, ppc, altura_rover,
+                )
+            )
 
     # --- degradación opcional ---------------------------------------------
     if s.desenfoque_px > 0:
@@ -450,7 +491,8 @@ def generar(
         camara=camara,
         con_perspectiva=bool(inclinacion > 0),
         esquinas=tuple(esquinas),
-        rovers=tuple(marcadores_rover),
+        rovers=tuple(sorted(marcadores_rover, key=lambda m: m.id)),
+        cubos=tuple(verdad_cubos),
     )
     return lienzo, verdad
 
@@ -581,6 +623,78 @@ class FuenteSintetica:
 
     def __exit__(self, *_) -> None:
         self.cerrar()
+
+
+def _dibujar_cubo(lienzo, camara, cubo: CuboDemo, lado_mm: float, sintetico) -> CuboVerdad:
+    """Dibuja un cubo como caja 3D y devuelve dónde está su base.
+
+    Un cubo NO se ve como un cuadrado de color: se ve como su **tapa más una o
+    dos caras laterales**, y la tapa aparece corrida hacia afuera del punto bajo
+    la cámara porque está a 60 mm de altura. Dibujarlo así es lo que le da al
+    detector un problema de verdad que resolver.
+
+    La silueta es el **casco convexo** de los ocho vértices proyectados, porque
+    un cubo es convexo y el contorno de un cuerpo convexo es el casco de sus
+    vértices. Se rellena con el tono lateral y encima se pinta la tapa más
+    clara, que es lo que hace la luz.
+    """
+    lado_celdas = lado_mm / camara.cell_mm
+    base = _cuadrilatero_celdas(cubo.col, cubo.row, lado_celdas, cubo.theta)
+    base_px = camara.proyectar_celdas(base, 0.0)
+    tapa_px = camara.proyectar_celdas(base, lado_mm)
+
+    color = sintetico.colores_cubo_bgr[cubo.color]
+    lateral = tuple(int(round(c * sintetico.brillo_lateral)) for c in color)
+    tapa = tuple(min(255, int(round(c * sintetico.brillo_tapa))) for c in color)
+
+    silueta = cv2.convexHull(np.vstack((base_px, tapa_px)).astype(np.float32))
+    cv2.fillConvexPoly(lienzo, silueta.astype(np.int32), lateral, cv2.LINE_AA)
+    cv2.fillConvexPoly(lienzo, tapa_px.astype(np.int32), tapa, cv2.LINE_AA)
+
+    return CuboVerdad(
+        color=cubo.color, col=cubo.col, row=cubo.row, theta_grados=cubo.theta,
+        base_px=tuple((float(x), float(y)) for x, y in base_px),
+        tapa_px=tuple((float(x), float(y)) for x, y in tapa_px),
+    )
+
+
+def _dibujar_cuerpo_rover(lienzo, camara, rover: RoverDemo, cuerpo) -> None:
+    """Dibuja el chasis negro del rover, que es lo que TAPA.
+
+    Sin cuerpo no hay oclusión que simular, y sin oclusión no se puede verificar
+    el caso más frecuente del juego: el rover empujando un cubo hacia una zona
+    de acopio, con su chasis del lado del centro de la cancha, escondiéndole al
+    cubo justo la arista de la base que el detector querría usar.
+
+    El chasis es negro: croma casi cero. Por eso NO se confunde con un cubo al
+    segmentar por color — el problema que genera es de **recorte del contorno**,
+    no de manchas que se mezclan.
+    """
+    rad = math.radians(rover.theta)
+    # Ejes del robot en celdas: adelante y a la izquierda.
+    fx, fy = math.cos(rad), -math.sin(rad)
+    ux, uy = -fy, fx
+    medio_largo = cuerpo.largo_mm / 2.0 / camara.cell_mm
+    medio_ancho = cuerpo.ancho_mm / 2.0 / camara.cell_mm
+    esquinas = np.array([
+        [rover.col + a * medio_largo * fx + b * medio_ancho * ux,
+         rover.row + a * medio_largo * fy + b * medio_ancho * uy]
+        for a, b in ((1, -1), (1, 1), (-1, 1), (-1, -1))
+    ], dtype=np.float64)
+
+    base_px = camara.proyectar_celdas(esquinas, 0.0)
+    tapa_px = camara.proyectar_celdas(esquinas, cuerpo.alto_mm)
+    gris = (cuerpo.gris,) * 3
+    silueta = cv2.convexHull(np.vstack((base_px, tapa_px)).astype(np.float32))
+    cv2.fillConvexPoly(lienzo, silueta.astype(np.int32), gris, cv2.LINE_AA)
+    cv2.fillConvexPoly(lienzo, tapa_px.astype(np.int32), tuple(min(255, g + 18) for g in gris),
+                       cv2.LINE_AA)
+
+
+def _distancia_a_camara(camara, col, row) -> float:
+    """Distancia del centro óptico a un punto del tablero. Ordena el dibujado."""
+    punto = camara.celdas_a_mundo(np.array([[col, row]]), 0.0)[0]
+    return float(np.linalg.norm(punto - camara.posicion_mm))
 
 
 def _dibujar_grilla(lienzo, tablero, sintetico, camara) -> None:

@@ -119,12 +119,26 @@ def escenario_barrido() -> tuple[RoverDemo, ...]:
     return tuple(rovers)
 
 
-def escenarios(cfg) -> list[tuple[str, tuple[RoverDemo, ...]]]:
+def escenarios(cfg) -> list[tuple[str, tuple[RoverDemo, ...], bool, tuple | None]]:
+    """Los escenarios y si se les dibuja el chasis del rover.
+
+    El barrido de 36 rovers va SIN chasis y SIN cubos a propósito. Con cuerpo,
+    treinta y seis robots a seis celdas de distancia se tapan entre sí y hasta
+    alcanzan a un marcador de esquina; y con cubos en la cancha, uno le come el
+    borde blanco a un marcador y ese rover deja de existir. Las dos cosas son
+    situaciones físicamente imposibles —en la cancha hay DOS rovers, no treinta
+    y seis— y lo que rompen no es el detector sino el escenario. Aislado sigue
+    sirviendo para lo único que existe: barrer el círculo completo de ángulos.
+
+    Los demás sí llevan chasis y cubos, que es lo realista, y de paso comprueban
+    que ni un cuerpo negro ni un cubo de color al lado estorban la detección del
+    marcador.
+    """
     return [
-        ("los dos rovers de la configuración", cfg.rovers_demo),
-        ("cinco rovers repartidos (identidad por ID)", escenario_multi_rover()),
-        ("ángulos en el borde del círculo", escenario_salto_angular()),
-        ("barrido de ángulos cada 10°", escenario_barrido()),
+        ("los dos rovers de la configuración", cfg.rovers_demo, True, None),
+        ("cinco rovers repartidos (identidad por ID)", escenario_multi_rover(), True, None),
+        ("ángulos en el borde del círculo", escenario_salto_angular(), True, None),
+        ("barrido de ángulos cada 10°", escenario_barrido(), False, ()),
     ]
 
 
@@ -274,8 +288,9 @@ def correr_modo(cfg, con_perspectiva: bool, umbral_mm: float, umbral_grados: flo
         "escenario", "n", "pos mm", "ang máx", "ang prom", "paralaje mm", "estado"))
     print("  " + "-" * 96)
 
-    for nombre, rovers_demo in escenarios(cfg):
-        imagen, verdad = generar(cfg, rovers=rovers_demo, perspectiva=persp)
+    for nombre, rovers_demo, con_cuerpo, cubos in escenarios(cfg):
+        imagen, verdad = generar(cfg, rovers=rovers_demo, perspectiva=persp,
+                                 con_cuerpo=con_cuerpo, cubos=cubos)
         detectados = detectar_marcadores(imagen, cfg.marcadores_esquina.nombre_diccionario)
         try:
             # Se le pasa la detección ya hecha: un solo paso del detector por cuadro.

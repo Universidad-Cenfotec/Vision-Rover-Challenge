@@ -242,6 +242,37 @@ class Perspectiva:
 
 
 @dataclass(frozen=True, slots=True)
+class CuerpoRover:
+    """Tamaño del chasis, SOLO para dibujarlo en la imagen sintética.
+
+    ⚠️ Medidas provisionales, no medidas sobre el robot real. No entran en
+    ningún número que el sistema publique: existen porque sin un cuerpo que
+    tape, no se puede verificar el caso más importante del juego —el rover
+    empujando un cubo y ocultándole la arista de la base—.
+    """
+
+    ancho_mm: float
+    largo_mm: float
+    alto_mm: float
+    gris: int
+
+
+@dataclass(frozen=True, slots=True)
+class CuboDemo:
+    """Un cubo de ejemplo para las imágenes de prueba.
+
+    `theta` es su rotación sobre el piso. No se publica —el contrato no lleva
+    orientación de cubo— pero cambia la forma de la silueta, y el detector tiene
+    que dar igual con cualquier rotación.
+    """
+
+    color: str
+    col: float
+    row: float
+    theta: float
+
+
+@dataclass(frozen=True, slots=True)
 class Sintetico:
     """Parámetros del generador de imágenes de prueba."""
 
@@ -252,6 +283,10 @@ class Sintetico:
     lado_marcador_esquina_celdas: float
     lado_marcador_rover_celdas: float
     borde_blanco_celdas: float
+    colores_cubo_bgr: dict[str, tuple[int, int, int]]
+    brillo_tapa: float
+    brillo_lateral: float
+    cuerpo_rover: CuerpoRover
     color_fondo: int
     color_grilla: int
     dibujar_grilla: bool
@@ -394,6 +429,7 @@ class ConfigVision:
     calibracion: Calibracion
     precision: Precision
     rovers_demo: tuple[RoverDemo, ...]
+    cubos_demo: tuple[CuboDemo, ...]
 
 
 def diccionario_aruco(nombre: str):
@@ -584,6 +620,20 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         lado_marcador_esquina_celdas=float(s["lado_marcador_esquina_celdas"]),
         lado_marcador_rover_celdas=float(s["lado_marcador_rover_celdas"]),
         borde_blanco_celdas=float(s["borde_blanco_celdas"]),
+        # Se guarda en BGR porque es lo que espera OpenCV; en el JSON va en RGB,
+        # que es como la gente piensa un color.
+        colores_cubo_bgr={
+            nombre: (int(rgb[2]), int(rgb[1]), int(rgb[0]))
+            for nombre, rgb in s["colores_cubo_rgb"].items()
+        },
+        brillo_tapa=float(s["brillo_tapa"]),
+        brillo_lateral=float(s["brillo_lateral"]),
+        cuerpo_rover=CuerpoRover(
+            ancho_mm=float(s["cuerpo_rover"]["ancho_mm"]),
+            largo_mm=float(s["cuerpo_rover"]["largo_mm"]),
+            alto_mm=float(s["cuerpo_rover"]["alto_mm"]),
+            gris=int(s["cuerpo_rover"]["gris"]),
+        ),
         color_fondo=int(s["color_fondo"]),
         color_grilla=int(s["color_grilla"]),
         dibujar_grilla=bool(s["dibujar_grilla"]),
@@ -603,6 +653,12 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         for r in d.get("rovers_demo", ())
     )
 
+    cubos = tuple(
+        CuboDemo(color=str(c["color"]), col=float(c["col"]), row=float(c["row"]),
+                 theta=float(c.get("theta", 0.0)))
+        for c in d.get("cubos_demo", ())
+    )
+
     cfg = ConfigVision(
         tablero=tablero,
         marcadores_esquina=marcadores,
@@ -615,6 +671,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         calibracion=calibracion,
         precision=precision,
         rovers_demo=rovers,
+        cubos_demo=cubos,
     )
     error = revisar_config(cfg)
     if error is not None:
@@ -685,6 +742,22 @@ def revisar_config(cfg: ConfigVision) -> str | None:
             "deteccion_rovers.desfase_angular_grados = {} está fuera de [-360, 360]; "
             "es un ángulo, no una cantidad de vueltas".format(dr.desfase_angular_grados)
         )
+    colores_dibujo = set(cfg.sintetico.colores_cubo_bgr)
+    faltan_colores = sorted(set(cfg.elementos.cubos.colores) - colores_dibujo)
+    if faltan_colores:
+        return (
+            "sintetico.colores_cubo_rgb no tiene con qué dibujar {}: el generador no "
+            "podría producir imágenes de prueba de esos cubos".format(faltan_colores)
+        )
+    colores_validos = set(cfg.elementos.cubos.colores)
+    for cubo in cfg.cubos_demo:
+        if cubo.color not in colores_validos:
+            return (
+                "cubos_demo: el color {!r} no está en elementos.cubos.colores ({})".format(
+                    cubo.color, sorted(colores_validos))
+            )
+    if len({c.color for c in cfg.cubos_demo}) != len(cfg.cubos_demo):
+        return "cubos_demo: hay dos cubos del mismo color, y el color ES la identidad"
     m = cfg.medicion_desfases
     if m.muestras_minimas < 3:
         return (
