@@ -28,5 +28,6 @@ El objetivo es que los rovers encuentren los objetos, los transporten y los colo
 - [Reglamento del VIsion Rover Challenge](https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/reglamento.md)
 - [Armado del Robot](https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/armado)
 - [Conexiones](https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/conexiones/README.md)
+- [Programación del CenfoBot](https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/programacion/README.md)
 - [Códigos en python de movimientos, sensores, control etc, del rover](https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/codigos/README.md)
 - [Archivos de fabricación](https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/archivos_fabricacion)
