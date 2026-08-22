@@ -1,3 +1,5 @@
+<img src="images/cenfobot.png" width="400">
+
 # Armado de CenfoBot
 
 > Puede ver las instrucciones detalladas en este video
