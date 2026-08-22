@@ -24,7 +24,6 @@ Durante el reto se dispone de:
 - Un sistema de visión global.
 - Cubos de diferentes colores.
 - Zonas de destino asociadas a los objetos.
-- Obstáculos dentro del área de competencia.
 - Marcadores visuales para identificar y localizar los rovers.
 - Sensores incorporados en los CenfoBots.
 - Comunicación inalámbrica.
@@ -43,7 +42,6 @@ El sistema oficial proporcionará información sobre el estado del entorno, incl
 - orientación de cada rover;
 - posición de los cubos;
 - identificación de los cubos por color;
-- posición de obstáculos;
 - posición de las zonas de destino;
 - dimensiones y referencia espacial del área de competencia;
 - estado general de la prueba.
@@ -65,7 +63,6 @@ Debe poder determinar, entre otros aspectos:
 - dónde se encuentran los dos rovers;
 - hacia dónde está orientado cada rover;
 - dónde están los cubos;
-- dónde están los obstáculos;
 - dónde se encuentran las zonas de destino;
 - qué elementos continúan disponibles para ser transportados.
 
@@ -97,7 +94,6 @@ Durante este desplazamiento deberá considerar:
 - la posición actual del rover;
 - su orientación;
 - la posición del objeto;
-- los obstáculos;
 - el otro rover;
 - los límites del área de competencia.
 
@@ -146,19 +142,8 @@ Después deberá continuar con las tareas pendientes.
 
 ---
 
-## 7. Evitar obstáculos
 
-Los rovers no pueden desplazarse suponiendo que el espacio está libre.
-
-El sistema debe tomar en cuenta los obstáculos presentes en el escenario y evitar colisiones durante:
-
-- el desplazamiento hacia los cubos;
-- el transporte de los objetos;
-- el desplazamiento hacia nuevas tareas.
-
----
-
-## 8. Evitar colisiones entre los dos rovers
+## 7. Evitar colisiones entre los dos rovers
 
 El segundo rover también forma parte del entorno dinámico.
 
@@ -168,7 +153,7 @@ El participante debe garantizar que su sistema pueda coordinar sus movimientos e
 
 ---
 
-## 9. Utilizar información imperfecta
+## 8. Utilizar información imperfecta
 
 La información del sistema de visión puede variar durante la ejecución.
 
@@ -180,7 +165,7 @@ También debe reconocer cuándo la información disponible ha cambiado y actuali
 
 ---
 
-## 10. Corregir errores durante la ejecución
+## 9. Corregir errores durante la ejecución
 
 El comportamiento del mundo físico no es perfectamente predecible.
 
@@ -261,7 +246,7 @@ En términos generales, deberá resolver:
 | **Control del rover** | Convertir decisiones en movimiento físico |
 | **Coordinación** | Evitar conflictos entre los dos robots |
 | **Manipulación** | Transportar físicamente los cubos |
-| **Evitación** | Evitar obstáculos y colisiones |
+| **Evitación** | Evitar colisiones |
 | **Corrección** | Adaptarse a errores y cambios en el entorno |
 | **Comunicación** | Mantener conectados los diferentes componentes |
 | **Autonomía** | Completar la tarea sin intervención humana |
