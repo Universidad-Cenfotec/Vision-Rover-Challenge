@@ -1,4 +1,4 @@
-# Códgos Aruco
+# Códigos Aruco
 
 Los códigos ArUco son marcadores visuales cuadrados con patrones binarios únicos que permiten a una cámara identificar objetos y determinar su posición y orientación. Son ampliamente utilizados en robótica y visión por computadora porque pueden detectarse de manera rápida y confiable.
 
