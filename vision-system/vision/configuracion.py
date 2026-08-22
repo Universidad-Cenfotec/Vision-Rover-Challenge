@@ -208,6 +208,30 @@ class MedicionDesfases:
 
 
 @dataclass(frozen=True, slots=True)
+class DeteccionCubos:
+    """Cómo se encuentran los cubos por su color.
+
+    Se segmenta por **croma** en Lab —el tablero es acromático, así que todo lo
+    saturado es objeto— y se clasifica por **matiz**, que es casi invariante a
+    la iluminación: un cubo rojo a la sombra sigue teniendo matiz de rojo.
+
+    El amarillo está entre los matices de referencia aunque esta edición no
+    tenga obstáculos, y **no es un cubo**: es una clase de exclusión. Verde y
+    amarillo están a solo 33° —el par más ajustado—, así que sin ella cualquier
+    objeto amarillo suelto se leería como cubo verde.
+    """
+
+    croma_minimo: float
+    matices_grados: dict[str, float]
+    matiz_tolerancia_grados: float
+    area_minima_relativa: float
+    area_maxima_relativa: float
+    recorte_robusto: float
+    residuo_maximo_celdas: float
+    pasos_refinamiento: int
+
+
+@dataclass(frozen=True, slots=True)
 class Paralaje:
     """Alturas para la corrección de paralaje. ETAPA TODAVÍA NO CONSTRUIDA.
 
@@ -422,6 +446,7 @@ class ConfigVision:
     marcadores_esquina: MarcadoresEsquina
     elementos: Elementos
     deteccion_rovers: DeteccionRovers
+    deteccion_cubos: DeteccionCubos
     medicion_desfases: MedicionDesfases
     paralaje: Paralaje
     sintetico: Sintetico
@@ -587,6 +612,18 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         desfase_angular_grados=float(dr["desfase_angular_grados"]),
     )
 
+    dc = d["deteccion_cubos"]
+    deteccion_cubos = DeteccionCubos(
+        croma_minimo=float(dc["croma_minimo"]),
+        matices_grados={k: float(v) for k, v in dc["matices_lab_grados"].items()},
+        matiz_tolerancia_grados=float(dc["matiz_tolerancia_grados"]),
+        area_minima_relativa=float(dc["area_minima_relativa"]),
+        area_maxima_relativa=float(dc["area_maxima_relativa"]),
+        recorte_robusto=float(dc["recorte_robusto"]),
+        residuo_maximo_celdas=float(dc["residuo_maximo_celdas"]),
+        pasos_refinamiento=int(dc["pasos_refinamiento"]),
+    )
+
     md = d["medicion_desfases"]
     medicion_desfases = MedicionDesfases(
         muestras_objetivo=int(md["muestras_objetivo"]),
@@ -664,6 +701,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         marcadores_esquina=marcadores,
         elementos=elementos,
         deteccion_rovers=deteccion_rovers,
+        deteccion_cubos=deteccion_cubos,
         medicion_desfases=medicion_desfases,
         paralaje=paralaje,
         sintetico=sintetico,
@@ -742,6 +780,23 @@ def revisar_config(cfg: ConfigVision) -> str | None:
             "deteccion_rovers.desfase_angular_grados = {} está fuera de [-360, 360]; "
             "es un ángulo, no una cantidad de vueltas".format(dr.desfase_angular_grados)
         )
+    dc_cfg = cfg.deteccion_cubos
+    faltan_matices = sorted(set(cfg.elementos.cubos.colores) - set(dc_cfg.matices_grados))
+    if faltan_matices:
+        return (
+            "deteccion_cubos.matices_lab_grados no tiene matiz de referencia para {}: "
+            "esos cubos no se podrían clasificar".format(faltan_matices)
+        )
+    if "yellow" not in dc_cfg.matices_grados:
+        return (
+            "deteccion_cubos.matices_lab_grados debe incluir 'yellow' como clase de "
+            "EXCLUSIÓN: está a 33° del verde, y sin ella un objeto amarillo se leería "
+            "como cubo verde"
+        )
+    if not (0.0 < dc_cfg.recorte_robusto <= 1.0):
+        return "deteccion_cubos.recorte_robusto debe estar en (0, 1]"
+    if dc_cfg.croma_minimo <= 0:
+        return "deteccion_cubos.croma_minimo debe ser > 0"
     colores_dibujo = set(cfg.sintetico.colores_cubo_bgr)
     faltan_colores = sorted(set(cfg.elementos.cubos.colores) - colores_dibujo)
     if faltan_colores:

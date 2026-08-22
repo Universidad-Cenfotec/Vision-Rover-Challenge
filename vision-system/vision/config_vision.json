@@ -120,6 +120,30 @@
     "_nota_acuerdo": "Cuánto pueden discrepar el radio del ajuste lineal y el del ajuste de círculo de Kåsa. Son dos matemáticas independientes sobre los mismos datos: el lineal usa la orientación medida además de la posición, el de Kåsa solo las posiciones. Que coincidan es la salvaguarda de un número que después va a corregir TODAS las posiciones publicadas.",
     "carpeta_mediciones": "mediciones"
   },
+  "deteccion_cubos": {
+    "_acerca_de": "Detección de cubos por color (vision/detectors/cubos.py). El tablero es acromático —grises, blancos, negros— así que todo lo que tenga color saturado es, por definición, un objeto de interés. Ese es el filtro que separa el fondo del contenido casi gratis.",
+    "croma_minimo": 28.0,
+    "_nota_croma": "Croma mínimo en Lab, `raiz(a*² + b*²)`, para que un píxel cuente como coloreado. El croma de Lab ES la saturación en sentido perceptual. Se usa Lab y no HSV para el umbral Y para la clasificación —un solo espacio— porque el matiz de HSV se vuelve inestable justo donde más importa: con poca luz o poca saturación da saltos entre extremos.",
+    "matices_lab_grados": {
+      "red": 39.9,
+      "green": 136.0,
+      "blue": 306.2,
+      "yellow": 103.0
+    },
+    "_POR_QUE_POR_MATIZ": "Se clasifica por el MATIZ —el ángulo `atan2(b*, a*)`— y no por la distancia a un color de referencia. El matiz es casi invariante a la iluminación y a lo saturado que sea el plástico: un cubo rojo a la sombra sigue teniendo matiz de rojo, aunque su croma y su luminosidad bajen. Por eso NO hace falta medir los cubos reales antes de arrancar: los valores de acá son los de los primarios sRGB puros y alcanzan, porque los tres colores del reto están de 94 a 170 grados entre sí.",
+    "_EL_AMARILLO_ES_EXCLUSION": "El amarillo está en la lista aunque esta edición no tenga obstáculos, y NO es un cubo: una mancha que caiga más cerca del amarillo se descarta. Existe porque verde y amarillo están a solo 33 grados —el par más ajustado con diferencia— y sin esa clase, cualquier objeto amarillo que ande por la cancha se leería como cubo verde.",
+    "matiz_tolerancia_grados": 45.0,
+    "_nota_tolerancia": "Cuánto puede apartarse el matiz medido del de referencia para aceptar la clasificación. Con 45 grados, las clases no se solapan (la más cercana está a 33) y una mancha de un color que no es ninguno de los tres se descarta en vez de forzarse.",
+    "area_minima_relativa": 0.25,
+    "area_maxima_relativa": 3.0,
+    "_nota_area": "Tamaño admisible de la mancha, como fracción del área que ocuparía la cara de un cubo. Se expresa relativo y no en píxeles porque los píxeles dependen de la resolución y de la altura de la cámara. El mínimo bajo (0,25) es a propósito: un cubo empujado por un rover pierde alrededor del 22 % de su área, y hay que seguir encontrándolo.",
+    "recorte_robusto": 0.75,
+    "_NOTA_RECORTE": "Fracción de los puntos del contorno que entran en el costo del ajuste, quedándose con los que mejor encajan. Es lo que vuelve el ajuste inmune a la OCLUSIÓN: cuando un rover tapa parte del cubo, el borde de la mancha por ese lado NO es el borde del cubo sino el del chasis, y esos puntos tirarían del ajuste hacia un lugar equivocado. Descartando el cuarto peor, el ajuste se apoya solo en el contorno que de verdad es del cubo.",
+    "residuo_maximo_celdas": 0.2,
+    "_NOTA_RESIDUO": "Residuo del ajuste por encima del cual la detección se marca como NO CONFIABLE. El residuo es un autodiagnóstico: mide cuánto se aparta el contorno observado del modelo del cubo. Medido sobre el generador: 0,014-0,017 con el cubo despejado, 0,073-0,133 con un rover empujándolo y tapándole el 22 %, y 0,24-0,28 con el 70 % tapado. El umbral de 0,20 sale de esos números, no de la intuición: separa lo que todavía ubica bien de lo que ya no. IMPORTA porque con muy poca evidencia el ajuste llega a errar MÁS que tomar el centro de la mancha: lo que no puede hacer es errar EN SILENCIO. Un cubo marcado como no confiable es trabajo del seguimiento, que conserva la última posición buena con la edad creciendo, como manda el contrato.",
+    "pasos_refinamiento": 4,
+    "_nota_refinamiento": "Rondas de descenso por coordenadas sobre las tres incógnitas del ajuste (posición y rotación), reduciendo el paso a la mitad en cada una. El tamaño del cubo NO es incógnita: son 60 mm conocidos, y eso es lo que permite reconstruir el cuadrado entero viendo solo una parte."
+  },
   "paralaje": {
     "_acerca_de": "Corrección de PARALAJE. ⚠️ ESTA ETAPA TODAVÍA NO ESTÁ CONSTRUIDA: está planificada en vision/geometry/ y hoy no hay código que lea este bloque. Los valores se registran de antemano, ya medidos y marcados con su estado, para que cuando se escriba la etapa no tenga que inventarlos ni incrustarlos.",
     "_QUE_PROBLEMA_RESUELVE": "Un objeto que tiene ALTURA no se ve donde está: se ve corrido hacia AFUERA, alejándose del punto que está justo debajo de la cámara. Cuanto más alto el objeto y más lejos del centro, más corrido. Sin corregirlo, el rover se publica varios milímetros fuera de su posición real, y el error crece hacia los bordes de la cancha. La cancha, los marcadores de esquina y las líneas de la cuadrícula están al ras del tablero y no sufren el efecto; los rovers y los cubos sí.",
