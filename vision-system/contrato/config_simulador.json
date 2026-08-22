@@ -41,12 +41,12 @@
   ],
   "_nota_cubes": "Cubos de 6 cm. El color ES la identidad: no puede haber dos del mismo color. Se admiten 2 o 3 cubos; para probar con 2, se borra una entrada. Todo cubo debe tener un depot de su color (el contrato lo exige).",
 
-  "obstacles": [
-    { "col": 21.5, "row": 21.5 },
-    { "col": 10.0, "row": 17.0 },
-    { "col": 31.0, "row": 15.0 }
-  ],
+  "obstacles": [],
   "_nota_obstacles": "Bloques amarillos de 10 cm. No llevan color ni id: el amarillo está reservado para obstáculos y son intercambiables entre sí.",
+
+  "_POR_QUE_VACIO": "⚠️ VACÍO A PROPÓSITO: la primera edición del reto NO usa obstáculos. El campo `obstacles` SIGUE EXISTIENDO en el mensaje y sigue siendo una lista; simplemente viene sin elementos. Eso NO es un cambio de contrato —el formato es idéntico y la versión sigue siendo 1—, así que ningún equipo tiene que tocar su código: quien itera la lista, como manda la regla 6.1, no encuentra nada y sigue.",
+
+  "_POR_QUE_NO_SE_DEJAN_DE_EJEMPLO": "Porque el simulador y la cancha real no pueden decir cosas distintas. Los equipos desarrollan contra esto, y un simulador que emite obstáculos que nunca van a existir hace que veinte equipos escriban lógica de esquive para nada. Si en una edición futura vuelven, se agregan acá y el mensaje deja de traer la lista vacía, sin cambiar el contrato ni avisar nada.",
 
   "start": { "col": 2.5, "row": 2.5 },
   "_nota_start": "Esquina de salida de los robots. Coincide con el origen (0,0), que es el marcador ArUco de menor ID (el 0). Está a 2.5 celdas del origen porque es el CENTRO de la zona de salida, no su vértice.",
