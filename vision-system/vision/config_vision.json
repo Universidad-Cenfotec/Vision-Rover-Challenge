@@ -1,0 +1,363 @@
+{
+  "_acerca_de": "Configuración del sistema de visión. JSON no admite comentarios, así que las notas van en claves que empiezan con guion bajo; el cargador las ignora porque lee las claves por nombre. Nada de esto se incrusta en el código.",
+
+  "tablero": {
+    "cols": 43,
+    "rows": 43,
+    "cell_mm": 20.0,
+
+    "_MEDIDA_VERIFICADA": "43 x 43 celdas de 20 mm = 860 x 860 mm. Medido físicamente el 4-ago-2026 contando cuadros entre los CENTROS de los marcadores de esquina, en las dos dimensiones (ID 0 a ID 1, e ID 0 a ID 3).",
+
+    "_DOS_NUMEROS_DISTINTOS": "El tablero FÍSICO mide 50 x 50 cuadros; la CANCHA EFECTIVA del sistema mide 43 x 43 celdas. No es una contradicción: los marcadores no van en el borde exacto sino hacia adentro, y la cancha del sistema es el área ENTRE SUS CENTROS. Los 7 cuadros de diferencia (3,5 por lado) son el margen donde están pegados los marcadores, y son BORDE MUERTO: no se usan para nada. Zonas de acopio, salida, cubos y robots viven todos dentro del área de 43 x 43. Si alguien mide el tablero, cuenta 50 y ve un 43 acá, la configuración NO está mal: está midiendo otra cosa.",
+
+    "_COMO_SE_DETECTO_EL_ERROR": "Antes acá decía 50, que era el valor nominal sin confirmar. La herramienta vision/tools/precision_ubicacion.py lo delató: reportaba 233 mm sobre desplazamientos reales de 200 mm, un error de escala del 16,5 % constante en todas las zonas y direcciones y con ruido bajísimo. Un error uniforme e independiente de la posición no puede ser de la cámara: solo puede ser la escala declarada. 1000/1.165 = 858 mm, que son 43 cuadros.",
+
+    "_nota_sincronizacion": "Este valor DEBE coincidir con la grilla de contrato/config_simulador.json. Los equipos desarrollan contra el simulador, así que si dicen cosas distintas, el código que funciona contra el simulador falla en la cancha."
+  },
+
+  "marcadores_esquina": {
+    "diccionario": "DICT_4X4_50",
+
+    "lado_mm": 100.0,
+    "borde_blanco_mm": 20.0,
+    "_MEDIDA_CONFIRMADA": "Marcador impreso de 100 x 100 mm de negro, con 20 mm de blanco por lado. Confirmado el 9-ago-2026 sobre los marcadores reales. Los 20 mm son el 20 % del lado, que es la regla de margen blanco de MONTAJE.md.",
+    "_nota_para_que_sirve_el_tamano": "El tamaño NO interviene en el cálculo de coordenadas: eso lo define el CENTRO de cada marcador, que no cambia si el marcador es más grande o más chico. Sí decide dos cosas prácticas: qué hay que imprimir, y desde qué distancia y con qué resolución se lo puede detectar de forma estable. Por eso se registra acá y no se deduce de nada.",
+
+    "_REGLA_DE_MONTAJE_FISICO": "⚠️ ESTO NO ES SOLO CÓDIGO: ES LA INSTRUCCIÓN DE CÓMO PEGAR LOS MARCADORES EN LA CANCHA. Si se pegan en otro orden, TODAS las coordenadas salen rotadas o espejadas y nada de lo que publique la visión va a tener sentido. Antes de pegar, leer esto y verificarlo dos veces. La guía completa de montaje, con la comprobación previa a la primera ronda, está en vision-system/MONTAJE.md.",
+
+    "_DISPOSICION_EN_LA_CANCHA": [
+      "El ID 0 va en la ESQUINA DE SALIDA DE LOS ROBOTS. Esa esquina es el origen (0,0).",
+      "Parado mirando la cancha desde arriba, con el marcador 0 arriba a la izquierda,",
+      "los otros tres van EN SENTIDO HORARIO: 1 arriba a la derecha, 2 abajo a la derecha,",
+      "3 abajo a la izquierda.",
+      "",
+      "         col ──────────────────────►",
+      "   ID 0 (0,0) ┌───────────────────┐ ID 1 (cols, 0)",
+      "     │        │                   │",
+      "    row       │      cancha       │",
+      "     │        │                   │",
+      "     ▼   ID 3 └───────────────────┘ ID 2 (cols, rows)",
+      "         (0, rows)",
+      "",
+      "El origen es el CENTRO del marcador ID 0, no su esquina: el centro es lo único",
+      "que se puede medir sin ambigüedad en una imagen.",
+      "Los cuatro marcadores deben quedar PLANOS sobre el tablero y COMPLETAMENTE",
+      "visibles para la cámara, con su zona blanca alrededor sin tapar."
+    ],
+
+    "disposicion": {
+      "0": "origen",
+      "1": "fin_col",
+      "2": "diagonal",
+      "3": "fin_row"
+    },
+    "_nota_disposicion": "Nombres en vez de números para que la disposición no se rompa al cambiar cols/rows. origen=(0,0), fin_col=(cols,0), diagonal=(cols,rows), fin_row=(0,rows)."
+  },
+
+  "elementos": {
+    "_acerca_de": "Medidas físicas REALES de los objetos del reto, medidas sobre los objetos mismos. Todavía no las consume nadie: las van a necesitar etapas que aún no existen —detección de color y detección de rovers, en detectors/—. Se registran ahora, como datos, para que esas etapas no nazcan con números incrustados en el código.",
+
+    "_ESTADOS": "Cada medida declara si está CONFIRMADA (verificada sobre el objeto real) o PROVISIONAL (todavía por verificar). La distinción no es burocrática: una medida provisional usada como si estuviera confirmada no produce ningún error, produce resultados mal EN SILENCIO. Antes de apoyarse en un valor de este bloque hay que mirar su estado.",
+
+    "cubos": {
+      "lado_mm": 60.0,
+      "colores": ["red", "green", "blue"],
+      "_ESTADO": "CONFIRMADO (9-ago-2026). Cubos de 60 mm de lado, uno de cada color.",
+      "_nota_altura": "Es un cubo, así que su altura ES su lado: 60 mm. Esa altura la va a necesitar la corrección de paralaje, que la lee de acá (ver el bloque `paralaje`). No se repite como campo aparte para que no puedan quedar dos números distintos diciendo lo mismo.",
+      "_nota_colores": "El color ES la identidad del cubo en el contrato v1: no hay dos del mismo color, por eso los cubos no llevan ID. Son los mismos tres colores de los depots declarados en contrato/config_simulador.json, y cada cubo va al depot de su color. El AMARILLO está reservado para los obstáculos: un objeto amarillo nunca es un cubo.",
+      "_nota_para_que_sirve": "La detección de color (detectors/, todavía no existe) va a segmentar por saturación y clasificar en espacio Lab. `lado_mm` le dice qué tamaño de mancha es plausible para un cubo; `colores` le dice en qué clases tiene que clasificar."
+    },
+
+    "marcador_rover": {
+      "lado_mm": 40.0,
+      "borde_blanco_mm": 5.0,
+      "espacio_disponible_mm": { "ancho": 50.0, "alto": 70.0 },
+
+      "_ESTADO": "⚠️ PROVISIONAL — TODAVÍA NO VERIFICADO. Estos dos números son una PROPUESTA, no una medición: 40 mm de negro + 5 mm de blanco por lado suman 50 mm, que es exactamente el lado corto del espacio disponible en el robot (50 x 70 mm). Entra justo, y por eso hay que comprobarlo antes de mandar a imprimir veinte robots.",
+
+      "_QUE_FALTA_VERIFICAR": "Que un marcador de 40 mm se detecte de forma ESTABLE —cuadro tras cuadro, sin parpadear, y en toda la cancha, no solo bajo la cámara— desde la Logitech C270 montada a 2,1 m de altura. La prueba se hará cuando la cámara esté montada a su altura de trabajo; hasta entonces este tamaño no está confirmado.",
+
+      "_SI_NO_ALCANZA": "Si a 40 mm la detección no resulta estable, hay margen sin cambiar el robot: usando el LADO LARGO del espacio disponible entran 60 mm de negro + 5 mm de blanco por lado dentro de los 70 mm. Las otras salidas son subir la resolución de la cámara o bajarla de altura, las dos más caras que agrandar un papel.",
+
+      "_nota_altura": "La ALTURA a la que va montado este marcador (90 mm sobre el tablero) NO está acá: está en el bloque `paralaje`, que es la etapa que la consume. Ver la nota de aquel bloque.",
+
+      "_nota_identidad": "El ID de este marcador es la identidad del rover en el contrato: los dos robots son negros e idénticos y solo el marcador los distingue. Los IDs 0-3 están reservados para las esquinas."
+    }
+  },
+
+  "deteccion_rovers": {
+    "_acerca_de": "Detección de rovers a partir de su marcador ArUco (vision/detectors/rovers.py). Qué marcador es un rover NO se declara acá: es rover todo marcador que NO sea una esquina de `marcadores_esquina.disposicion`. Así la regla no se rompe si mañana las esquinas fueran otras, y no hay una lista de IDs de rover que mantener sincronizada con la realidad.",
+
+    "ids_ignorados": [],
+    "_nota_ids_ignorados": "IDs que hay que descartar aunque no sean esquinas. Arranca VACÍO a propósito: descartar en silencio un marcador que sí es un rover es peor que reportar uno de más, que al menos se ve. El caso concreto para el que existe esta lista es el marcador ID 20 de la prueba de precisión (precision.id_marcador_prueba): existe físicamente, y si queda olvidado sobre la cancha se publica como si fuera un rover. Si eso llega a pasar, poner [20] acá.",
+
+    "desfase_marcador_a_centro_mm": {
+      "adelante": 0.0,
+      "izquierda": 0.0
+    },
+    "desfase_angular_grados": 0.0,
+
+    "_QUE_SON_LOS_DESFASES": "El marcador NO está en el centro de rotación del robot, y su orientación NO es necesariamente la del frente del robot (las paletas). Lo que se detecta es la pose del MARCADOR; lo que el contrato publica es la pose del ROBOT. Estos dos desfases son el puente entre una y otra.",
+
+    "_POR_QUE_ADELANTE_E_IZQUIERDA_Y_NO_COL_Y_ROW": "Porque el desfase es solidario al ROBOT y el robot gira. Un vector guardado como (col, row) sería válido para una sola orientación: apenas el robot girara 90 grados apuntaría a cualquier lado. Guardado como adelante/izquierda —el marco del propio robot— vale para toda orientación, y el detector lo rota por el ángulo detectado antes de sumarlo.",
+
+    "_CONVENCION": "El vector va DEL centro del marcador AL centro de rotación. `adelante` positivo = el centro de rotación queda hacia las paletas (marcador montado hacia atrás). `izquierda` positiva = hacia la izquierda del robot. `desfase_angular_grados` es el ángulo que hay que sumarle a la orientación del marcador para obtener la del frente del robot, positivo antihorario, misma convención que el contrato.",
+
+    "_ESTADO": "⚠️ LOS DOS EN CERO, pero por razones DISTINTAS: uno por medición confirmada y el otro todavía pendiente. La diferencia importa y por eso van separados abajo. En cero, la pose del robot es idéntica a la del marcador.",
+
+    "_ESTADO_desfase_angular": "✅ MEDIDO Y CONFIRMADO ≈ 0 (9-ago-2026, robot real, marcador ID 10, con vision/tools/medir_desfases.py). Dos sesiones independientes, de cuatro orientaciones cada una, dieron +0,18° y −0,50°, con dispersión de ~1°. O sea: el marcador está alineado con el frente del robot dentro de ±1°, que es el propio ruido de la medición. Se deja en cero DELIBERADAMENTE: un grado no cambia la navegación. Este método —alinear las paletas con la cuadrícula y declarar el rumbo— NO depende de que el robot gire en el lugar, y por eso su resultado vale aunque la medición de posición no haya salido.",
+
+    "_ESTADO_desfase_posicion": "⚠️ TODAVÍA NO MEDIDO. Se intentó dos veces el 9-ago-2026 y la herramienta RECHAZÓ las dos con veredicto INSUFICIENTE: el robot SE TRASLADÓ mientras giraba, entre 6 y 12 cm. Con eso el modelo de giro puro no se cumple y el radio que devuelve el ajuste no mide el desfase: mide qué tan bien un círculo explica una nube que no es un círculo. Los dos intentos dieron 10,7 ± 6,9 mm y 1,8 ± 4,5 mm, que NO coinciden entre sí. Lo único que se puede afirmar hoy es que el desfase es menor que unos 10 mm —el umbral de precisión del sistema—, NO que sea despreciable. Se deja en cero porque es el mejor valor disponible, no porque esté verificado.",
+
+    "_COMO_CERRAR_EL_DESFASE_DE_POSICION": "Hace falta un giro sobre el eje DE VERDAD: las dos ruedas en sentidos opuestos y a la misma velocidad, no un pivote sobre una rueda ni empujarlo a mano. Durante la captura, la herramienta ahora avisa en vivo si el robot se está trasladando, comparando el tamaño de la nube de puntos con el círculo que va ajustando: si el marcador está casi centrado, la nube tiene que quedar como una manchita de pocos milímetros; si se pasea por la pantalla, hay traslación y conviene parar y reintentar. Las sesiones crudas de los dos intentos fallidos quedaron en vision/mediciones/desfases_rover10_*.json, guardadas a propósito: documentan un intento fallido con su motivo.",
+
+    "_SI_SE_CAMBIA_EL_ROBOT": "Estas mediciones valen para ESTE robot con SU marcador pegado donde está hoy. Si se cambia el robot, se despega o se remonta el marcador, las dos hay que rehacerlas: no son propiedades del sistema de visión sino de un aparato concreto.",
+
+    "_COMO_SE_VAN_A_MEDIR": "Con el propio sistema, una vez que la detección funcione. (1) DESFASE DE POSICIÓN: hacer girar el robot SOBRE SU EJE, sin desplazarse, y mirar la posición que reporta la visión. Si el marcador estuviera justo sobre el centro de rotación, el punto reportado se quedaría quieto; como está corrido, describe una CIRCUNFERENCIA. El radio de esa circunferencia es el módulo del desfase y el centro de la circunferencia es el centro de rotación real. La dirección se lee en el marco del marcador, donde es constante durante todo el giro, y de ahí salen `adelante` e `izquierda`. (2) DESFASE ANGULAR: apoyar las paletas contra una línea conocida de la cuadrícula y restarle a ese ángulo el que reporta el marcador. Es el sistema midiéndose a sí mismo, que es lo que lo hace verificable sin instrumental aparte."
+  },
+
+  "medicion_desfases": {
+    "_acerca_de": "Parámetros de la herramienta que MIDE los dos desfases marcador-robot (vision/tools/medir_desfases.py). No los aplica: los mide y los muestra para que una persona los revise y los ponga en `deteccion_rovers`. Es el sistema midiéndose a sí mismo.",
+
+    "muestras_objetivo": 24,
+    "muestras_minimas": 12,
+    "_nota_muestras": "Cuántas posiciones capturar mientras el robot gira. El ruido de cada muestra se promedia como 1/raíz(N): con ruido de 1 mm por muestra, 24 muestras dejan el centro en ±0,2 mm. 24 sobre una vuelta completa es una muestra cada 15 grados.",
+
+    "paso_angular_grados": 12.0,
+    "_nota_paso": "Cuánto tiene que haber girado el marcador desde la última muestra aceptada para tomar una nueva. Evita gastar muestras en el mismo punto: veinte capturas del mismo ángulo no son veinte muestras, son una.",
+
+    "arco_minimo_grados": 180.0,
+    "arco_recomendado_grados": 270.0,
+    "arco_inaceptable_grados": 120.0,
+    "_NOTA_ARCO": "EL PARÁMETRO MÁS IMPORTANTE. Con un arco corto, separar el centro de giro del desfase es un problema mal condicionado: el error del centro se amplifica por 1/(1-cos(arco/2)). A 360 y 180 grados la amplificación es 1; a 90 grados es 3,4; a 45 grados es 13; a 20 grados es 66 y la medición no sirve para nada. Por debajo de `arco_inaceptable_grados` la herramienta SE NIEGA a dar un resultado, en vez de dar uno malo que parece bueno. Entre el mínimo y el recomendado, avisa que el número es flojo. Lo ideal es una vuelta completa.",
+
+    "cuadros_por_muestra": 15,
+    "_nota_cuadros": "Cuadros de video a promediar en cada muestra. Una sola lectura mezclaría el temblor de la detección con lo que se quiere medir.",
+
+    "estabilidad_celdas": 0.05,
+    "pausa_s": 0.5,
+    "_nota_captura_automatica": "Para capturar sin que haya que tocar el teclado con las manos en el robot: se gira, se suelta, y la herramienta captura sola cuando el marcador se quedó quieto. `estabilidad_celdas` es cuánto se puede mover entre cuadros para considerarlo quieto (0,05 celdas = 1 mm); `pausa_s` es cuánto tiene que sostener esa quietud. Mismo patrón que la captura automática de calibrar_camara.py.",
+
+    "orientaciones_objetivo": 4,
+    "_nota_orientaciones": "Cuántas orientaciones distintas usar para el desfase angular. Cuatro, a 0/90/180/270 grados, reparten cualquier error de alineación en vez de arrastrarlo. El promedio va por MEDIA CIRCULAR: promediar 359 y 1 a secas da 180, que es el revés de la respuesta.",
+
+    "radio_minimo_mm": 3.0,
+    "_nota_radio_minimo": "Si el marcador está prácticamente sobre el centro de giro, el radio es comparable al ruido y LA DIRECCIÓN NO EXISTE: cualquier ángulo ajusta igual de bien. Por debajo de este radio la herramienta recomienda dejar el desfase en cero en vez de inventar una dirección.",
+
+    "residuo_bueno_mm": 1.5,
+    "residuo_aceptable_mm": 3.0,
+    "_nota_residuo": "Cuánto se apartan las muestras del modelo de giro puro. Es un diagnóstico FÍSICO antes que numérico: si el robot se TRASLADA mientras gira, la trayectoria deja de ser un círculo y el residuo se dispara. Un residuo alto casi siempre significa que el robot se movió del lugar, no que la matemática falló.",
+
+    "acuerdo_metodos_mm": 1.0,
+    "_nota_acuerdo": "Cuánto pueden discrepar el radio del ajuste lineal y el del ajuste de círculo de Kåsa. Son dos matemáticas independientes sobre los mismos datos: el lineal usa la orientación medida además de la posición, el de Kåsa solo las posiciones. Que coincidan es la salvaguarda de un número que después va a corregir TODAS las posiciones publicadas.",
+
+    "carpeta_mediciones": "mediciones"
+  },
+
+  "paralaje": {
+    "_acerca_de": "Corrección de PARALAJE. ⚠️ ESTA ETAPA TODAVÍA NO ESTÁ CONSTRUIDA: está planificada en vision/geometry/ y hoy no hay código que lea este bloque. Los valores se registran de antemano, ya medidos y marcados con su estado, para que cuando se escriba la etapa no tenga que inventarlos ni incrustarlos.",
+
+    "_QUE_PROBLEMA_RESUELVE": "Un objeto que tiene ALTURA no se ve donde está: se ve corrido hacia AFUERA, alejándose del punto que está justo debajo de la cámara. Cuanto más alto el objeto y más lejos del centro, más corrido. Sin corregirlo, el rover se publica varios milímetros fuera de su posición real, y el error crece hacia los bordes de la cancha. La cancha, los marcadores de esquina y las líneas de la cuadrícula están al ras del tablero y no sufren el efecto; los rovers y los cubos sí.",
+
+    "altura_marcador_rover_mm": 90.0,
+    "_ESTADO_altura_marcador_rover": "CONFIRMADO (9-ago-2026). Es la altura desde la superficie del tablero hasta el plano donde está pegado el marcador ArUco del rover. ÉSTE es el dato que la corrección de paralaje necesita para el rover: lo que se detecta en la imagen es el marcador, no el robot, así que la altura que importa es la del marcador y no la del chasis.",
+
+    "_nota_altura_de_los_cubos": "Para los cubos la altura no se declara acá: es su lado, 60 mm, que ya está en elementos.cubos.lado_mm. Un solo número, un solo lugar.",
+
+    "_nota_altura_de_camara": "La altura de la cámara NO se configura: se DEDUCE de la pose de cámara que sale de los cuatro marcadores de esquina (CLAUDE.md, sección 5). Declararla a mano sería pedir un dato que el sistema ya sabe medir, y que además cambiaría cada vez que se remonte la cámara sin que nadie se acuerde de actualizar el archivo.",
+
+    "_NO_CONFUNDIR_CON_PRECISION": "El bloque `precision` tiene su propio `altura_marcador_mm`, que vale 0.2 y es OTRA COSA: es el espesor del papel del marcador de prueba, y sirve para descontar el paralaje de ESA medición. Este bloque es para el sistema en producción, que publica posiciones ABSOLUTAS, donde el paralaje no se cancela solo."
+  },
+
+  "sintetico": {
+    "_acerca_de": "Generador de imágenes sintéticas de prueba. NO es el simulador de contrato/: aquel emite posiciones en JSON, este dibuja imágenes del tablero para que el sistema de visión las procese, conociendo la verdad de lo que dibujó.",
+
+    "ancho_px": 1280,
+    "alto_px": 1280,
+    "margen_px": 120,
+    "_nota_tamano": "El lado de celda en píxeles se DERIVA de estos tres valores para que la grilla entre en la imagen, y el tablero queda centrado. Así el tamaño de imagen es lo configurable y no hay que ajustar dos números coherentes entre sí.",
+    "_nota_margen": "El margen tiene que dar lugar a los marcadores de esquina COMPLETOS con su zona blanca: están centrados EN la esquina, así que sobresalen media marca más el borde blanco hacia afuera de la cancha. Con marcadores de 5 celdas y 1 de blanco, eso son 3,5 celdas ≈ 85 px, y por eso el margen subió de 80 a 120. Si se recorta la zona blanca contra el borde de la imagen, el detector deja de encontrar el marcador y la prueba falla por una razón que no tiene nada que ver con lo que se quería probar. `revisar_config` lo comprueba.",
+
+    "lado_marcador_esquina_celdas": 5.0,
+    "lado_marcador_rover_celdas": 2.0,
+    "borde_blanco_celdas": 1.0,
+    "_MEDIDAS_TOMADAS_DE_LA_REALIDAD": "Estos tres valores son las medidas físicas reales convertidas a celdas de 20 mm: esquina 100 mm = 5 celdas (marcadores_esquina.lado_mm), rover 40 mm = 2 celdas (elementos.marcador_rover.lado_mm, PROVISIONAL), blanco 20 mm = 1 celda (marcadores_esquina.borde_blanco_mm). Antes decían 3,0 / 4,0 / 0,6, que eran valores nominales de cuando no se había medido nada: dibujaban un tablero que no se parecía al real, y el generador sintético existe justamente para probar contra la realidad. Están escritos en celdas y no en mm porque es lo que el generador dibuja; si cambia una medida física, hay que actualizarlos acá también.",
+    "_nota_borde_blanco": "Zona blanca obligatoria alrededor de cada marcador. Sin ella el detector de ArUco no encuentra el marcador: necesita contraste contra el fondo en todo el contorno. En la cancha real hay que respetarlo igual al imprimir y pegar. OJO: el generador usa UN SOLO valor de borde para los dos tipos de marcador, y está puesto en el del marcador de esquina (20 mm). El del rover es más chico en la realidad (5 mm), así que en la imagen sintética el rover lleva más blanco del que va a tener en la cancha. Es la diferencia conservadora: la prueba no se vuelve más fácil por el lado del marcador chico, que es el que está en duda.",
+
+    "color_fondo": 235,
+    "color_grilla": 215,
+    "dibujar_grilla": true,
+    "paso_grilla_celdas": 5,
+    "_nota_grilla": "La grilla es solo una ayuda visual para mirar la imagen; no interviene en la detección.",
+
+    "desenfoque_px": 0,
+    "ruido_sigma": 0.0,
+    "_nota_degradacion": "Para acercar la imagen sintética a una foto real. En 0 la imagen es perfecta. Subirlos sirve para ver cuánto aguanta la detección antes de fallar.",
+
+    "perspectiva": {
+      "activa": false,
+      "inclinacion": 0.12,
+      "_nota": "Simula una cámara que NO está perfectamente cenital, inclinando el tablero: el borde superior se angosta una fracción `inclinacion` del ancho de cada lado. Apagada por defecto. Encenderla importa para verificar de verdad: con una imagen perfectamente cenital la homografía se reduce a una escala y la prueba pasaría aunque la matemática estuviera mal. Además, la cámara real nunca va a estar perfectamente cenital."
+    }
+  },
+
+  "camara": {
+    "_acerca_de": "Webcam USB real. Cámara de referencia: ArgomTech CAM40, 1080p, lente gran angular, enfoque manual.",
+
+    "indice": "menu",
+    "_nota_indice": "Qué cámara usar. Tres valores posibles: (1) \"menu\" —el recomendado— muestra las cámaras detectadas numeradas, con su nombre y resolución, y pregunta cuál usar; si hay una sola, la toma sin preguntar. (2) Un número, para no elegir cada vez, una vez que se sabe cuál es. (3) \"auto\", que toma la primera que responda sin preguntar: sirve para correr sin nadie delante, pero OJO, con dos cámaras conectadas puede agarrar la equivocada.",
+    "_nota_por_que_menu": "El índice de una webcam USB NO es estable: depende de qué se enchufó primero, de si hay cámara integrada y de si la máquina se reinició. Y elegir mal no da ningún error: da una calibración hecha con la cámara equivocada. Por eso conviene que elija una persona mirando la lista, en vez de que el programa adivine.",
+
+    "backend": "auto",
+    "_nota_backend": "auto elige según el sistema operativo: AVFoundation en macOS, DSHOW en Windows, V4L2 en Linux. Se elige DSHOW y no MSMF en Windows porque expone mejor los controles de exposición y enfoque, que es lo que nos importa. Valores posibles: auto, avfoundation, dshow, msmf, v4l2, any.",
+
+    "ancho": 1920,
+    "alto": 1080,
+    "fps": 30,
+    "fourcc": "MJPG",
+    "_nota_fourcc": "Muchas webcams entregan 1080p a 5 fps en YUY2 (sin comprimir) y a 30 fps en MJPG. Pedir MJPG suele ser la diferencia entre servible e inservible. Poner null para no pedir ninguno. Lo que la cámara realmente negocie se reporta en el diagnóstico: casi nunca es exactamente lo pedido.",
+
+    "buffersize": 1,
+    "_nota_buffersize": "Un solo cuadro en el buffer del driver. Si se acumulan, se procesa telemetría vieja creyendo que es actual. Muchos backends lo ignoran; para eso está además el hilo lector que descarta.",
+
+    "cuadros_calentamiento": 10,
+    "_nota_calentamiento": "Cuadros a descartar al abrir. Las cámaras arrancan en automático y tardan en estabilizarse; medir o fijar ajustes antes de eso da lecturas engañosas.",
+
+    "segundos_arranque": 6.0,
+    "_nota_arranque": "Cuánto esperar a que la cámara entregue su PRIMER cuadro. Hay que esperar por tiempo y no por cantidad de intentos: una webcam USB en macOS puede tardar más de un segundo en arrancar después de que se le pide una resolución, y un puñado de lecturas inmediatas fallan todas antes de que el dispositivo haya arrancado. Si en ese plazo no llega nada con el formato pedido, la cámara se reabre SIN pedirle formato y se reintenta, porque muchas webcams rechazan una combinación de resolución y códec que no soportan y dejan de entregar imágenes sin dar ningún error.",
+
+    "ajustes": {
+      "_acerca_de": "Exposición, enfoque y balance de blancos SIEMPRE fijos, nunca en automático (CLAUDE.md, sección 5). Un ajuste que se mueve solo cambia los colores a mitad de ronda y rompe la detección. El caso más peligroso es el robot negro: con exposición automática, la cámara sube la ganancia para 'compensar' el negro y quema los marcadores blancos.",
+
+      "exposicion": {
+        "fijar": true,
+        "valor": -6,
+        "prueba_a": -9,
+        "prueba_b": -3,
+        "_nota_unidades": "OJO: las unidades dependen del backend. En DSHOW el valor suele ser log2 de segundos (-6 = 1/64 s); en V4L2 son unidades de 100 microsegundos. No hay un valor universal: hay que ajustarlo mirando la imagen en la cámara y el sistema reales.",
+        "_nota_prueba": "prueba_a y prueba_b son dos valores MUY distintos que se usan para verificar por efecto: si el brillo medio de la imagen no cambia entre los dos, la cámara ignoró el ajuste aunque diga que lo aceptó."
+      },
+
+      "enfoque": {
+        "fijar": true,
+        "valor": 0,
+        "prueba_a": 0,
+        "prueba_b": 255,
+        "_nota": "Con enfoque manual fijo. El rango típico va de 0 (infinito) a 255 (cerca), pero varía por cámara. La verificación por efecto compara la nitidez entre los dos valores de prueba."
+      },
+
+      "balance_blancos": {
+        "fijar": true,
+        "valor": 4500,
+        "prueba_a": 2800,
+        "prueba_b": 6500,
+        "_nota": "Temperatura de color en kelvin. La verificación por efecto compara la relación azul/rojo de la imagen entre los dos valores."
+      },
+
+      "valor_manual_autoexposicion": null,
+      "_nota_autoexposicion": "El número que hay que escribir en CAP_PROP_AUTO_EXPOSURE para pasar a MANUAL cambia según el backend: 0.25 en DSHOW, 1 en V4L2. Con null se elige el que corresponde al backend en uso. Solo hay que tocarlo si una cámara concreta usa otra convención."
+    },
+
+    "umbrales_efecto": {
+      "brillo_min": 3.0,
+      "nitidez_rel_min": 0.15,
+      "color_rel_min": 0.05,
+      "_nota": "Cuánto tiene que cambiar la imagen entre los dos valores de prueba para dar por confirmado que el ajuste tuvo efecto real. brillo_min en niveles de gris (0-255); los otros dos son diferencias relativas."
+    },
+
+    "_nota_macos": "ADVERTENCIA: en macOS, OpenCV sobre AVFoundation casi no expone controles de cámara, así que es esperable que exposición y enfoque salgan como 'no soportado'. Eso NO significa que la cámara no sirva: significa que macOS no deja tocarlos por esta vía. La prueba que cuenta se hace en Windows con DSHOW, que es el destino de despliegue."
+  },
+
+  "calibracion": {
+    "_acerca_de": "Calibración INTRÍNSECA del lente: mide cuánto curva las líneas rectas el gran angular, para poder corregirlo. Se hace con un patrón de ajedrez movido en el aire, que NO es el tablero de juego. Es una capa previa: se corrige la imagen y recién después se detectan marcadores y se calcula la geometría de esquinas.",
+
+    "patron": {
+      "columnas_internas": 13,
+      "filas_internas": 6,
+      "lado_mm": 25.0,
+
+      "_nota_lado": "EL DATO MÁS IMPORTANTE. Tiene que ser el tamaño REAL del cuadro impreso, medido con regla. Si la hoja se imprimió escalada, la calibración queda mal en silencio: el error de reproyección puede salir bajo igual porque el patrón es coherente consigo mismo, pero las medidas del mundo real salen corridas.",
+
+      "_nota_dimensiones": "columnas y filas deben ser DISTINTAS: con un patrón cuadrado el detector no puede determinar la orientación y las esquinas salen ordenadas de forma inconsistente entre vistas.",
+
+      "_ELEGIDO": "13x6 con cuadros de 25 mm = 350 x 175 mm, en DOS hojas Carta horizontal con UN solo empalme. Elegido para una cámara a 130 cm: un patrón ancho cubre mejor los bordes del cuadro, que es donde más distorsiona el lente. Se prefirió sobre 13x9 (350 x 250 mm) porque aquel necesita CUATRO hojas y TRES empalmes, y cada empalme es una oportunidad de que el patrón deje de ser plano.",
+
+      "_ALTERNATIVA_UNA_HOJA": "Si no se logra dejar las dos hojas perfectamente planas, usar 9x6 (250 x 175 mm), que entra en UNA sola hoja sin empalmes. Un patrón chico y perfectamente plano calibra MEJOR que uno grande y ondulado: la calibración supone que el patrón es un plano perfecto y cada ondulación la interpreta como distorsión del lente. Para cambiarlo: poner columnas_internas en 9 y regenerar el PDF.",
+
+      "_nota_como_usarlo": "El tamaño del patrón NO obliga a calibrar desde lejos: durante la calibración conviene acercarlo a la cámara para que llene el cuadro, y alejarlo en otras vistas. Con el patrón 13x6, que es alargado, conviene además rotarlo 90 grados en algunas capturas para cubrir también el eje vertical del cuadro."
+    },
+
+    "papel": "carta",
+
+    "vistas_minimas": 12,
+    "vistas_objetivo": 15,
+    "_nota_vistas": "Lo que importa no es la cantidad sino la VARIEDAD: 15 vistas todas de frente y en el centro calibran peor que 10 bien repartidas. La herramienta exige además cubrir las 9 zonas del cuadro, los 3 tramos de distancia y 4 vistas inclinadas.",
+
+    "modelo": "estandar",
+    "_nota_modelo": "estandar = 5 coeficientes (k1,k2,p1,p2,k3), alcanza para la mayoría de los lentes. racional = 8 coeficientes, para gran angulares que distorsionan más de lo que el estándar puede describir. Si el error de reproyección queda alto con estandar, probar racional.",
+
+    "alpha": 0.0,
+    "_nota_alpha": "Cuánto campo visual se conserva al corregir. 0 = recorta a los píxeles válidos, sin bordes negros pero perdiendo algo de borde. 1 = conserva todo el campo, con bordes negros curvados que pueden confundir a los detectores. Si con 0 se pierde de vista algún marcador de esquina, subirlo.",
+
+    "carpeta_perfiles": "calibraciones",
+    "perfil_por_defecto": "argomtech_cam40",
+    "_nota_perfiles": "Cada cámara tiene su PROPIO perfil en esta carpeta, relativa a vision/, y conviven sin pisarse: argomtech_cam40.json, logitech_c270.json, etc. Son los PERFILES DE CÁMARA del CLAUDE.md sección 5: los parámetros específicos de cada aparato van en configuración y no en el código.",
+    "_nota_por_defecto": "Qué cámara usa el sistema cuando nadie elige un perfil explícitamente: en modo automático o al arrancar sin selección. La cámara por defecto del sistema es la ArgomTech CAM40. Se declara acá como dato y no incrustada en el código, para poder cambiarla sin tocar nada.",
+    "_nota_por_que_no_una_ruta_fija": "Antes esto era UNA ruta fija, y el sistema cargaba ese archivo sin importar qué cámara estuviera conectada. Con dos cámaras eso significó corregir una Logitech C270 con el perfil de la CAM40 —que es gran angular y distorsiona mucho más—, deformando la imagen en vez de corregirla, y sin ningún error que lo delatara. De ahí que ahora cada cámara tenga su perfil y que el sistema compare la huella del perfil contra la cámara conectada.",
+
+    "umbrales": {
+      "excelente_px": 0.3,
+      "bueno_px": 0.5,
+      "aceptable_px": 1.0,
+      "_nota_error": "Error de reproyección en píxeles. Por debajo de bueno_px la calibración sirve; por encima de aceptable_px hay que repetirla.",
+
+      "estabilidad_px": 2.0,
+      "inclinacion_min": 0.15,
+      "pausa_s": 0.8,
+      "_nota_captura": "estabilidad_px: cuánto se pueden mover las esquinas entre cuadros para considerar que el patrón está quieto (una foto movida arruina el promedio). inclinacion_min: cuánta deformación del contorno cuenta como vista inclinada. pausa_s: espera entre capturas automáticas."
+    }
+  },
+
+  "precision": {
+    "_acerca_de": "Herramienta que mide la precisión de ubicación REAL de una cámara sobre el tablero, para decidir si una 720p alcanza. No mide una posición absoluta sino un DESPLAZAMIENTO conocido: eso evita tener que ubicar el origen con precisión, y además neutraliza el paralaje por construcción (ver la nota de altura_marcador_mm).",
+
+    "umbral_mm": 10.0,
+    "_nota_umbral": "Criterio de aceptación: error máximo por debajo de 1 cm en toda la cancha. Un cubo mide 60 mm, así que 10 mm de error mantiene el objetivo dentro del cubo.",
+
+    "id_marcador_prueba": 20,
+    "lado_marcador_mm": 60.0,
+    "_nota_marcador": "ID fuera de 0-3 (esquinas) y de 10-11 (rovers). 60 mm son exactamente 3 cuadros de la cuadrícula, así que se alinea a las líneas sin ambigüedad, y es del tamaño de un cubo. Se genera con: python -m vision.tools.patron_calibracion --marcador-prueba 20",
+
+    "cuadros_por_medicion": 10,
+    "_nota_cuadros": "Cuántos cuadros de la cuadrícula mover el marcador entre las dos capturas. 10 cuadros = 200 mm. La verdad se obtiene CONTANDO cuadros, que es exacto, en vez de midiendo con regla. Conviene usar tantos como entren en la zona: sobre 10 cuadros, 1 mm de desalineación pesa 0,5 %; sobre 20, la mitad.",
+
+    "muestras_por_punto": 30,
+    "_nota_muestras": "Cuadros de video a promediar en cada captura. Una sola muestra mezclaría el temblor de la detección con el error que se quiere medir. La dispersión de las muestras se reporta aparte como RUIDO: es la repetibilidad de la cámara, que es lo que más distingue una 720p de una 1080p.",
+
+    "margen_marcadores_celdas": 6.0,
+    "_nota_margen": "Distancia mínima a un marcador de esquina para aceptar una captura. Los cuatro marcadores son los que DEFINEN las coordenadas: medir el error sobre ellos daría cero por construcción y no probaría nada, como corregir con las propias respuestas. Todas las mediciones van sobre puntos internos independientes del ajuste.",
+
+    "altura_camara_mm": 1300.0,
+    "altura_marcador_mm": 0.2,
+    "_nota_paralaje": "Un objeto de altura h a distancia d del punto bajo la cámara se ve corrido a d*H/(H-h): una multiplicación alrededor de ese punto. Como se mide un DESPLAZAMIENTO, las dos posiciones se escalan por el mismo factor y el paralaje queda como un error de ESCALA puro, calculable y descontable. Con papel común (0,2 mm) aporta 0,03 mm sobre 200 mm; incluso con 10 mm de espesor aporta 1,55 mm. Ajustar altura_marcador_mm al espesor real del material usado: el sistema lo descuenta y lo muestra aparte para que no contamine el veredicto.",
+    "_nota_paralaje_sistema_real": "OJO: esto salva a ESTA prueba, no al sistema. La visión publica posiciones ABSOLUTAS, donde el paralaje no se cancela; su corrección sigue siendo necesaria y está planificada en geometry/.",
+
+    "zonas": [
+      { "nombre": "centro",            "col": 17, "row": 17 },
+      { "nombre": "superior-izquierda","col": 7,  "row": 7  },
+      { "nombre": "superior-derecha",  "col": 26, "row": 7  },
+      { "nombre": "inferior-derecha",  "col": 26, "row": 26 },
+      { "nombre": "inferior-izquierda","col": 7,  "row": 26 }
+    ],
+    "_nota_ubicacion_zonas": "Los puntos son de INICIO: desde ahí el marcador se mueve cuadros_por_medicion celdas hacia la derecha y hacia abajo. Con una cancha de 43, margen 6 a los marcadores y 10 de desplazamiento, la banda útil es [6, 37] y los inicios tienen que caer en [6, 27]. Si se cambia el tamaño de cancha o el desplazamiento, hay que revisar que estas cinco sigan cumpliendo.",
+    "_nota_zonas": "Centro y cuatro esquinas, HACIA ADENTRO de los marcadores. El error no es uniforme y suele ser peor en los bordes, que es donde el criterio se pone a prueba. En cada zona se mide en dos direcciones, porque la distorsión residual no afecta igual a los dos ejes.",
+
+    "carpeta_mediciones": "mediciones"
+  },
+
+  "rovers_demo": [
+    { "id": 10, "col": 12.5, "row": 9.0, "theta": 30.0 },
+    { "id": 11, "col": 36.0, "row": 33.5, "theta": 205.0 }
+  ],
+  "_nota_rovers_demo": "Rovers de ejemplo para las imágenes de prueba. El id es el ID de su marcador ArUco: distinto de 0-3, que están reservados para las esquinas. theta en grados, 0 = derecha, antihorario, igual que el contrato."
+}
