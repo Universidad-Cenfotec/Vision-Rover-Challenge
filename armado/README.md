@@ -1,10 +1,54 @@
 # Armado de CenfoBot
 
+> Puede ver las instrucciones detalladas en este video
+
 Esta guía describe, paso a paso, el proceso de ensamblaje físico de **CenfoBot**, siguiendo el orden mostrado en el video de armado.
 
 > **Importante:** durante el montaje, no apriete completamente tornillos ni tiras plásticas hasta que las piezas estén correctamente alineadas. Esto facilita el ajuste de motores, carcasa y cableado.
 
 ---
+
+## Contenido del kit de CenfoBot
+
+> Pueden ver este video de unboxing del kit de CenfoBot
+
+### 1. Estructura y movimiento
+
+1. **Chasis principal**
+2. **2 motores DC**
+3. **2 ruedas**
+4. **2 soportes/abrazaderas para los motores**
+5. **Tornillos y tuercas para fijación de los motores**
+
+### 2. Electrónica
+
+6. **Microcontrolador** IdeaBoard (ESP32)
+7. **Sensores infrarrojos** en el chasis
+8. **Sensor de color**
+9. **Sensor ultrasónico de 5 pines**
+10. **Cable Qwiic**
+11. **Cables jumper/Dupont**
+12. **Caja de Baterías**
+
+### 3. Carcasa
+
+13. **Pieza frontal de acrílico**
+14. **Pieza superior de acrílico**
+15. **2 piezas laterales de acrílico**
+16. **Pieza trasera de acrílico**
+17. **2 soportes internos de acrílico**
+18. **Placa superior pequeña de acrílico**
+19. **Tiras plásticas (zip ties)** para ensamblar y sujetar la carcasa
+
+### 4. Tornillería y separadores
+
+20. **4 tornillos para el montaje del microcontrolador/placa superior**
+21. **2 standoffs de aproximadamente 2 cm**
+22. **Tornillería adicional de montaje**
+
+# Instrucciones de Armado
+
+> Pueden ver este video con las instrucciones detalladas
 
 ## 1. Preparar los motores
 
