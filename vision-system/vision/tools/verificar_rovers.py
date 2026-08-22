@@ -42,7 +42,9 @@ import numpy as np
 try:  # como paquete
     from ..configuracion import Perspectiva, RoverDemo, cargar_config
     from ..detectors.rovers import detectar_rovers, diferencia_angular
-    from ..geometry.coordenadas import ErrorGeometria, construir_sistema, detectar_marcadores
+    from ..geometry.coordenadas import (
+        ErrorGeometria, construir_sistema, detectar_marcadores, pose_camara,
+    )
     from ..sources.generador_sintetico import generar
 except ImportError:  # como script suelto
     from vision.configuracion import (  # type: ignore[no-redef]
@@ -58,6 +60,7 @@ except ImportError:  # como script suelto
         ErrorGeometria,
         construir_sistema,
         detectar_marcadores,
+        pose_camara,
     )
     from vision.sources.generador_sintetico import generar  # type: ignore[no-redef]
 
@@ -163,7 +166,7 @@ class Resultado:
         return max(self.paralajes) if self.paralajes else 0.0
 
 
-def medir(verdad, rovers, ids_esquina) -> Resultado:
+def medir(verdad, rovers, ids_esquina, corregido: bool = False) -> Resultado:
     """Compara lo detectado contra la verdad, buscando cada rover por su ID.
 
     Se busca por identidad y no por posición en la lista, que es la misma regla
@@ -185,7 +188,8 @@ def medir(verdad, rovers, ids_esquina) -> Resultado:
         # "¿el detector midió bien lo que la cámara le mostró?" y "¿cuánto cuesta
         # que todavía no exista la corrección de paralaje?". Mezclarlas haría que
         # un detector perfecto pareciera roto.
-        error_pos = math.hypot(rover.col - real.col_en_plano, rover.row - real.row_en_plano)
+        objetivo = (real.col, real.row) if corregido else (real.col_en_plano, real.row_en_plano)
+        error_pos = math.hypot(rover.col - objetivo[0], rover.row - objetivo[1])
         r.paralajes.append(real.paralaje_celdas)
         error_ang = abs(diferencia_angular(rover.theta_grados, real.theta_grados))
         r.errores_pos.append(error_pos)
@@ -198,7 +202,8 @@ def medir(verdad, rovers, ids_esquina) -> Resultado:
         for otro_id, otro in verdad_por_id.items():
             if otro_id == rover.id:
                 continue
-            if math.hypot(rover.col - otro.col_en_plano, rover.row - otro.row_en_plano) <= error_pos:
+            otro_obj = (otro.col, otro.row) if corregido else (otro.col_en_plano, otro.row_en_plano)
+            if math.hypot(rover.col - otro_obj[0], rover.row - otro_obj[1]) <= error_pos:
                 r.identidades_ok = False
     return r
 
@@ -280,8 +285,10 @@ def correr_modo(cfg, con_perspectiva: bool, umbral_mm: float, umbral_grados: flo
             todo_bien = False
             continue
 
-        rovers = detectar_rovers(detectados, sistema, cfg)
-        r = medir(verdad, rovers, ids_esquina)
+        # La pose sale de los mismos cuatro marcadores; nadie la declara.
+        pose = pose_camara(sistema, verdad.camara.matriz)
+        rovers = detectar_rovers(detectados, sistema, cfg, pose)
+        r = medir(verdad, rovers, ids_esquina, corregido=True)
 
         paso = (r.completo and not r.esquinas_coladas and r.identidades_ok
                 and r.peor_pos() <= umbral_celdas and r.peor_ang() <= umbral_grados)
@@ -315,9 +322,9 @@ def correr_modo(cfg, con_perspectiva: bool, umbral_mm: float, umbral_grados: flo
     print("\n  umbrales: posición {:.2f} mm ({:.4f} celdas)  |  orientación {:.2f}°".format(
         umbral_mm, umbral_celdas, umbral_grados))
     print("  esquinas {} reservadas y nunca reportadas como rover".format(ids_esquina))
-    print("  La columna 'paralaje mm' NO es un error del detector: es cuánto se corre el\n"
-          "  marcador del rover por estar a {:.0f} mm del tablero. Lo va a descontar la\n"
-          "  etapa de paralaje, que todavía no existe.".format(cfg.paralaje.altura_marcador_rover_mm))
+    print("  'pos mm' se mide contra la posición REAL del rover, con el paralaje ya\n"
+          "  corregido usando la pose deducida de los cuatro marcadores. La columna\n"
+          "  'paralaje mm' es cuánto habría errado sin esa corrección.")
     print("  resultado: {}".format("TODO OK" if todo_bien else "HAY ESCENARIOS QUE FALLAN"))
     if salida:
         print("  imagen guardada en: {}".format(salida))

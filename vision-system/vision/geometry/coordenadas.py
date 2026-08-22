@@ -164,6 +164,116 @@ def centro_de(esquinas: np.ndarray) -> tuple[float, float]:
     return (float(centro[0]), float(centro[1]))
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class PoseCamara:
+    """Dónde está la cámara respecto de la cancha, deducido de los marcadores.
+
+    Nadie mide esto con una cinta: sale de los cuatro marcadores de esquina, que
+    el sistema ya tiene que ver de todas formas. Si alguien mueve la cámara, el
+    cuadro siguiente trae una pose nueva y nadie tiene que acordarse de nada.
+
+    Para qué hace falta
+    -------------------
+    Las coordenadas NO la necesitan: la homografía de los cuatro centros alcanza
+    y sobra. La necesitan las dos cosas que dependen de que los objetos tengan
+    **altura**, porque los marcadores de esquina están al ras y no saben nada de
+    eso:
+
+    - la **corrección de paralaje**, que necesita `altura_mm` y `nadir_celdas`;
+    - la **detección de cubos**, que necesita saber hacia dónde está el nadir
+      para distinguir la base de la tapa.
+
+    `nadir_celdas` es la celda justo debajo de la cámara. Es el centro de la
+    homotecia del paralaje: un objeto ahí no se corre nada por alto que sea.
+    """
+
+    nadir_celdas: tuple[float, float]
+    altura_mm: float
+    error_reproyeccion_px: float
+
+    def factor_paralaje(self, altura_objeto_mm: float) -> float:
+        """`H/(H−h)`: cuánto se agranda lo que se ve de un objeto elevado."""
+        if altura_objeto_mm <= 0 or altura_objeto_mm >= self.altura_mm:
+            return 1.0
+        return self.altura_mm / (self.altura_mm - altura_objeto_mm)
+
+    def a_ras(self, celdas: np.ndarray, altura_objeto_mm: float) -> np.ndarray:
+        """Corrige el paralaje: de dónde SE VE un objeto elevado a dónde ESTÁ.
+
+        Es traer el punto hacia el nadir en la proporción `(H−h)/H`. Exacto para
+        cualquier inclinación de cámara, porque el rayo solo depende del centro
+        óptico y no de hacia dónde mire.
+        """
+        celdas = np.asarray(celdas, dtype=np.float64).reshape(-1, 2)
+        nadir = np.array(self.nadir_celdas, dtype=np.float64)
+        return nadir + (celdas - nadir) / self.factor_paralaje(altura_objeto_mm)
+
+    def elevar(self, celdas: np.ndarray, altura_objeto_mm: float) -> np.ndarray:
+        """El camino de vuelta: de dónde ESTÁ un objeto a dónde SE VE."""
+        celdas = np.asarray(celdas, dtype=np.float64).reshape(-1, 2)
+        nadir = np.array(self.nadir_celdas, dtype=np.float64)
+        return nadir + (celdas - nadir) * self.factor_paralaje(altura_objeto_mm)
+
+
+def pose_camara(sistema: SistemaCoordenadas, matriz_camara: np.ndarray) -> PoseCamara:
+    """Deduce dónde está la cámara a partir de los marcadores de esquina.
+
+    Los cuatro centros son puntos **coplanares de posición métrica conocida** —
+    están sobre el tablero, separados por `cols × cell_mm`— y la cámara está
+    calibrada. Con eso, `solvePnP` da la pose completa sin ningún dato más.
+
+    `matriz_camara` tiene que ser la de la imagen **ya rectificada**, que es
+    `Rectificador.matriz_nueva` y no la del perfil: quitar la distorsión cambia
+    los intrínsecos efectivos, y usar los de antes metería un error que después
+    nadie sabría de dónde salió.
+
+    Se devuelve el error de reproyección para que quien la use pueda decidir si
+    creerle. Es el único control disponible: no hay una verdad contra la cual
+    comparar en la cancha real.
+    """
+    ids = sorted(sistema.centros_px)
+    if len(ids) < 4:
+        raise ErrorGeometria(
+            "hacen falta los cuatro marcadores de esquina para deducir la pose de cámara"
+        )
+
+    # Mundo: X = col·cell, Y = −row·cell, Z hacia arriba. El menos en Y es la
+    # misma convención del generador, y es lo que hace que la imagen no salga
+    # espejada con una cámara que mira hacia abajo.
+    objeto = []
+    imagen = []
+    for id_aruco in ids:
+        col, row = sistema.celda_de(*sistema.centros_px[id_aruco])
+        objeto.append([col * sistema.cell_mm, -row * sistema.cell_mm, 0.0])
+        imagen.append(list(sistema.centros_px[id_aruco]))
+
+    objeto = np.array(objeto, dtype=np.float64)
+    imagen = np.array(imagen, dtype=np.float64)
+
+    ok, rvec, tvec = cv2.solvePnP(
+        objeto, imagen, np.asarray(matriz_camara, dtype=np.float64),
+        np.zeros(5, dtype=np.float64), flags=cv2.SOLVEPNP_IPPE,
+    )
+    if not ok:
+        raise ErrorGeometria("solvePnP no pudo resolver la pose de la cámara")
+
+    rot, _ = cv2.Rodrigues(rvec)
+    # El centro óptico en coordenadas del mundo.
+    centro = (-rot.T @ tvec).ravel()
+
+    reproyectado, _ = cv2.projectPoints(
+        objeto, rvec, tvec, np.asarray(matriz_camara, dtype=np.float64),
+        np.zeros(5, dtype=np.float64),
+    )
+    error = float(np.linalg.norm(reproyectado.reshape(-1, 2) - imagen, axis=1).max())
+
+    return PoseCamara(
+        nadir_celdas=(float(centro[0] / sistema.cell_mm), float(-centro[1] / sistema.cell_mm)),
+        altura_mm=float(centro[2]),
+        error_reproyeccion_px=error,
+    )
+
+
 def construir_sistema(
     imagen: np.ndarray,
     cfg: ConfigVision,
