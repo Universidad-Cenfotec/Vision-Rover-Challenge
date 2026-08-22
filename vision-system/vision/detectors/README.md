@@ -93,12 +93,16 @@ es el centro de rotación real. El procedimiento completo está en las notas de
 
 ## Lo que todavía NO existe
 
-### Detección de cubos y obstáculos por color
+### Detección de cubos por color
 
-- **Cubos:** 6 cm, identidad por **color** (`green`, `blue`, `red`). No hay dos
-  del mismo color, así que el color alcanza para identificarlos.
-- **Obstáculos:** bloques **amarillos** de 10 cm. El **amarillo está reservado**:
-  un objeto amarillo nunca es un cubo.
+**Cubos:** 6 cm, identidad por **color** (`green`, `blue`, `red`). No hay dos del
+mismo color, así que el color alcanza para identificarlos.
+
+> **Los obstáculos no entran en esta primera edición del reto.** El campo
+> `obstacles` del contrato **sigue existiendo** y se emite como lista vacía: eso
+> no es un cambio de formato y no obliga a los equipos a tocar nada. El
+> **amarillo sigue reservado** de todas formas, para que ningún objeto amarillo
+> que ande por ahí se lea como cubo.
 
 El método decidido: **segmentar por saturación** y clasificar en espacio **Lab**,
 no HSV.
@@ -111,6 +115,30 @@ Es un filtro que separa el fondo del contenido casi gratis.
 importa —con poca saturación o poca luz— y da saltos entre valores extremos. Lab
 separa la luminosidad del color de forma más pareja, así que un cubo rojo a la
 sombra se sigue pareciendo a un cubo rojo.
+
+#### El cubo se ubica por su borde inferior, no por el centro de la mancha
+
+Lo que la cámara ve de un cubo no es una cara: es la **tapa más una o dos caras
+laterales**. El centroide de esa mancha está a una altura efectiva intermedia,
+que además **cambia según dónde esté el cubo** en la cancha.
+
+Por eso el cubo se ubica por su **borde inferior**, la línea donde apoya en el
+piso. Un punto en el piso está a **altura cero**, así que el factor de paralaje
+`(H−h)/H` vale exactamente **1**: no hay nada que corregir, y la homografía del
+tablero es exacta ahí por construcción. **La posición del cubo no depende de
+dónde ni a qué altura esté montada la cámara.**
+
+**Pero el borde no es el centro, y el contrato publica el centro.** El punto más
+bajo de la mancha es una esquina de la base, y el centro está entre 30 y 42 mm de
+ahí según cómo esté rotado el cubo — tres a cuatro veces el umbral de 10 mm.
+
+La forma correcta es trabajar **en celdas y no en píxeles**, igual que en la
+detección de rovers. Al pasar el contorno por la homografía, lo que está en el
+piso cae exactamente donde está y lo que tiene altura cae corrido **hacia afuera
+del punto bajo la cámara**. Entonces el borde de la mancha que **mira hacia el
+nadir** son las dos aristas de la base. Como la huella es un cuadrado de 60 mm
+conocido, ajustar esas dos aristas perpendiculares reconstruye el cuadrado, y el
+centro queda a medio lado hacia adentro de cada una.
 
 Las medidas físicas de los cubos ya están registradas en `config_vision.json`,
 bajo `elementos.cubos`.

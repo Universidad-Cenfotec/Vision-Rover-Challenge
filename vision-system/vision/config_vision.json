@@ -63,7 +63,11 @@
       "lado_mm": 60.0,
       "colores": ["red", "green", "blue"],
       "_ESTADO": "CONFIRMADO (9-ago-2026). Cubos de 60 mm de lado, uno de cada color.",
-      "_nota_altura": "Es un cubo, así que su altura ES su lado: 60 mm. Esa altura la va a necesitar la corrección de paralaje, que la lee de acá (ver el bloque `paralaje`). No se repite como campo aparte para que no puedan quedar dos números distintos diciendo lo mismo.",
+      "_nota_altura": "Es un cubo, así que su altura ES su lado: 60 mm. No se repite como campo aparte para que no puedan quedar dos números distintos diciendo lo mismo.",
+
+      "_DECISION_SE_UBICA_POR_EL_BORDE_INFERIOR": "El cubo NO se ubica por el centro de su mancha de color, sino por su BORDE INFERIOR: la línea donde el cubo apoya en el piso. Decidido el 9-ago-2026. El motivo es que un punto en el piso está a altura CERO, así que el factor de paralaje (H-h)/H vale exactamente 1 y NO HAY NADA QUE CORREGIR: la homografía del tablero es exacta ahí por construcción. La alternativa —el centroide de la mancha— no sirve: lo que la cámara ve de un cubo es la tapa MÁS una o dos caras laterales, así que ese centroide está a una altura efectiva intermedia que además cambia según dónde esté el cubo en la cancha. Corregirlo con h=60 sobre-corregiría.",
+
+      "_OJO_EL_BORDE_NO_ES_EL_CENTRO": "El borde inferior da una LÍNEA en el piso, y el contrato publica el CENTRO. Tomar el punto más bajo de la mancha da una esquina de la base, que está entre 30 y 42 mm del centro según cómo esté rotado el cubo: tres a cuatro veces el umbral de 10 mm. La forma correcta es trabajar en CELDAS y no en píxeles: al pasar el contorno por la homografía, lo que está en el piso cae exactamente donde está y lo que tiene altura cae corrido hacia afuera del punto bajo la cámara, así que el borde de la mancha que MIRA HACIA EL NADIR son las dos aristas de la base. Como la huella es un cuadrado de `lado_mm` conocido, ajustar esas dos aristas perpendiculares reconstruye el cuadrado y el centro queda a medio lado hacia adentro de cada una. Exacto, y sin necesitar la pose de la cámara.",
       "_nota_colores": "El color ES la identidad del cubo en el contrato v1: no hay dos del mismo color, por eso los cubos no llevan ID. Son los mismos tres colores de los depots declarados en contrato/config_simulador.json, y cada cubo va al depot de su color. El AMARILLO está reservado para los obstáculos: un objeto amarillo nunca es un cubo.",
       "_nota_para_que_sirve": "La detección de color (detectors/, todavía no existe) va a segmentar por saturación y clasificar en espacio Lab. `lado_mm` le dice qué tamaño de mancha es plausible para un cubo; `colores` le dice en qué clases tiene que clasificar."
     },
@@ -162,7 +166,7 @@
     "altura_marcador_rover_mm": 90.0,
     "_ESTADO_altura_marcador_rover": "CONFIRMADO (9-ago-2026). Es la altura desde la superficie del tablero hasta el plano donde está pegado el marcador ArUco del rover. ÉSTE es el dato que la corrección de paralaje necesita para el rover: lo que se detecta en la imagen es el marcador, no el robot, así que la altura que importa es la del marcador y no la del chasis.",
 
-    "_nota_altura_de_los_cubos": "Para los cubos la altura no se declara acá: es su lado, 60 mm, que ya está en elementos.cubos.lado_mm. Un solo número, un solo lugar.",
+    "_ALCANCE_SOLO_EL_ROVER": "⚠️ Esta corrección aplica a UN SOLO objeto: el marcador del rover. No a los cubos y no a los obstáculos. (1) Los CUBOS se ubican por su borde inferior, que está en el piso: altura cero, factor de corrección exactamente 1, nada que corregir. Ver elementos.cubos._DECISION_SE_UBICA_POR_EL_BORDE_INFERIOR. (2) Los OBSTÁCULOS no existen en esta primera edición del reto. Así que de tres alturas distintas quedó una sola, y es la única que hay que declarar.",
 
     "_nota_altura_de_camara": "La altura de la cámara NO se configura: se DEDUCE de la pose de cámara que sale de los cuatro marcadores de esquina (CLAUDE.md, sección 5). Declararla a mano sería pedir un dato que el sistema ya sabe medir, y que además cambiaría cada vez que se remonte la cámara sin que nadie se acuerde de actualizar el archivo.",
 
