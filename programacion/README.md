@@ -35,6 +35,86 @@ Para programar el CenfoBot se utiliza Thonny, el cual se puede descargar desde e
 - [Seguir intrucciones acá](https://github.com/Universidad-Cenfotec/Sumobot/blob/main/uso_thonny.md)
 - [Ver video explicativo](https://youtu.be/EOnnslZhL2c?si=IYAHV_utJocjeJvx)
 
+## Programación del CenfoBot en C/C++
+
+El CenfoBot también puede programarse en **C/C++** utilizando el entorno de desarrollo de Arduino. Esta opción permite trabajar directamente con las capacidades del microcontrolador ESP32 de la IdeaBoard y utilizar las bibliotecas disponibles para esta plataforma.
+
+### Instalar Arduino IDE
+
+1. Descargar e instalar la versión más reciente de [Arduino IDE](https://www.arduino.cc/en/software).
+
+2. Abrir Arduino IDE y entrar en:
+
+   `File > Preferences`
+
+   o, en español:
+
+   `Archivo > Preferencias`
+
+3. En **Additional Boards Manager URLs** agregar la siguiente dirección:
+
+   `https://espressif.github.io/arduino-esp32/package_esp32_index.json`
+
+4. Ir a:
+
+   `Tools > Board > Boards Manager`
+
+5. Buscar:
+
+   `esp32`
+
+6. Instalar el paquete **esp32 by Espressif Systems**.
+
+### Seleccionar la tarjeta
+
+Conectar el CenfoBot mediante USB y seleccionar una tarjeta ESP32 compatible desde:
+
+`Tools > Board > esp32`
+
+Luego seleccionar el puerto correspondiente desde:
+
+`Tools > Port`
+
+Dependiendo de la versión de la IdeaBoard, puede ser necesario seleccionar específicamente el modelo de ESP32 correspondiente a la placa.
+
+### Programa básico
+
+Para comprobar que el entorno funciona correctamente se puede comenzar con un programa sencillo:
+
+```cpp
+void setup() {
+  Serial.begin(115200);
+}
+
+void loop() {
+  Serial.println("Hola CenfoBot");
+  delay(1000);
+}
+```
+
+Presione **Upload** para compilar y transferir el programa al CenfoBot.
+
+Puede abrir el monitor serial desde:
+
+`Tools > Serial Monitor`
+
+y configurarlo a:
+
+`115200 baud`
+
+### Importante
+
+Cuando se programa la IdeaBoard utilizando Arduino/C++, el firmware de CircuitPython instalado en la placa es reemplazado por el programa compilado.
+
+Si posteriormente desea volver a utilizar CircuitPython, deberá volver a instalarlo utilizando el procedimiento de flasheo descrito en la sección **Resetear (Flashear) el IdeaBoard**.
+
+### Alternativa con PlatformIO
+
+También es posible programar el CenfoBot utilizando **PlatformIO** con Visual Studio Code. Esta alternativa es útil para proyectos más grandes, ya que facilita la administración de bibliotecas, dependencias, compilación y organización del código C/C++.
+
+[PlatformIO](https://platformio.org/)
+
+
 ##  Resetear (Flashear) el IdeaBoard
 
 Para resetear el IdeaBoard, se hace fácilmente a través de esta página:  [IdeaBoard Flasher](https://crcibernetica.github.io/ideaboard-terminal/) Asegurese que Thonny esté CERRADO, cuando intente reflashear o el flasher no va a encontrar el puerto cn el IdeaBoard.
