@@ -6,4 +6,4 @@
 | **Percepción**                        | `code_4IR.py`, `code_ultrasonic.py`, `color_detect.py` | Obtener información del entorno                                                |
 | **Orientación y movimiento avanzado** | `code_acc.py`, `code_PID.py`                           | Utilizar la IMU para medir movimiento y corregir la trayectoria                |
 | **Datos**                             | `code_storage.py`                                      | Registrar mediciones para analizarlas posteriormente                           |
-| **Infraestructura**                   | `ideaboard.py`                                         | Proporcionar las funciones de bajo nivel necesarias para controlar el hardware |
+| **Infraestructura**                   | `ideaboard.py`                                         | Proporcionar las funciones de bajo nivel necesarias para controlar el hardware. Esta pibrería está incluida por defecto en la placa |
