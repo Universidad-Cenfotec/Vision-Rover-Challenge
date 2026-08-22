@@ -1,7 +1,7 @@
 
 # Programación del CenfoBot
 
-El CenfoBot se programa en CircuitPython, ya sea mediante una plataforma web que no requiere instalación o utilizando Thonny.
+El CenfoBot se programa en CircuitPython, ya sea mediante una plataforma web que no requiere instalación, usando bloques o utilizando Thonny.
 > [Este video explica](https://youtu.be/lS5O-A5Uo8o?si=VfWL0nDUsuCoXepT)
 
 
