@@ -230,10 +230,15 @@ class Paralaje:
 
 @dataclass(frozen=True, slots=True)
 class Perspectiva:
-    """Inclinación simulada de la cámara para las imágenes sintéticas."""
+    """Inclinación FÍSICA de la cámara sintética, en grados.
+
+    Es el ángulo entre el eje óptico y la vertical. La cámara se corre de lado y
+    sigue apuntando al centro del tablero, que es lo que pasa cuando un soporte
+    real no quedó perfectamente a plomo.
+    """
 
     activa: bool
-    inclinacion: float
+    inclinacion_grados: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,6 +248,7 @@ class Sintetico:
     ancho_px: int
     alto_px: int
     margen_px: int
+    altura_camara_mm: float
     lado_marcador_esquina_celdas: float
     lado_marcador_rover_celdas: float
     borde_blanco_celdas: float
@@ -574,6 +580,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         ancho_px=int(s["ancho_px"]),
         alto_px=int(s["alto_px"]),
         margen_px=int(s["margen_px"]),
+        altura_camara_mm=float(s["altura_camara_mm"]),
         lado_marcador_esquina_celdas=float(s["lado_marcador_esquina_celdas"]),
         lado_marcador_rover_celdas=float(s["lado_marcador_rover_celdas"]),
         borde_blanco_celdas=float(s["borde_blanco_celdas"]),
@@ -583,7 +590,8 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         paso_grilla_celdas=int(s["paso_grilla_celdas"]),
         desenfoque_px=int(s["desenfoque_px"]),
         ruido_sigma=float(s["ruido_sigma"]),
-        perspectiva=Perspectiva(activa=bool(p["activa"]), inclinacion=float(p["inclinacion"])),
+        perspectiva=Perspectiva(activa=bool(p["activa"]),
+                                inclinacion_grados=float(p["inclinacion_grados"])),
     )
 
     camara = _leer_camara(d["camara"])
@@ -728,8 +736,10 @@ def revisar_config(cfg: ConfigVision) -> str | None:
                 s.margen_px, vuelo_celdas, vuelo_celdas * ppc
             )
         )
-    if not (0.0 <= s.perspectiva.inclinacion < 0.5):
-        return "perspectiva.inclinacion debe estar en [0, 0.5)"
+    if not (0.0 <= s.perspectiva.inclinacion_grados < 60.0):
+        return "perspectiva.inclinacion_grados debe estar en [0, 60): es un ángulo físico"
+    if s.altura_camara_mm <= 0:
+        return "sintetico.altura_camara_mm debe ser > 0"
     c = cfg.camara
     if isinstance(c.indice, str):
         if c.indice.lower() not in ("menu", "auto"):

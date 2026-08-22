@@ -90,7 +90,9 @@ def medir(verdad, sistema, celdas: np.ndarray) -> tuple[float, float]:
 
 def anotar(imagen: np.ndarray, sistema, verdad) -> np.ndarray:
     """Dibuja lo detectado sobre la imagen, para poder mirarla y creerle."""
-    lienzo = cv2.cvtColor(imagen, cv2.COLOR_GRAY2BGR)
+    # La fuente sintética ya entrega BGR, igual que la cámara real; se convierte
+    # solo si viniera en gris, para que la herramienta sirva con las dos.
+    lienzo = imagen.copy() if imagen.ndim == 3 else cv2.cvtColor(imagen, cv2.COLOR_GRAY2BGR)
     for id_aruco, (x, y) in sistema.centros_px.items():
         cv2.circle(lienzo, (int(round(x)), int(round(y))), 9, (0, 0, 255), 2)
         cv2.putText(
@@ -112,11 +114,11 @@ def anotar(imagen: np.ndarray, sistema, verdad) -> np.ndarray:
 def correr_modo(cfg, con_perspectiva: bool, umbral_mm: float, salida: str | None, quiere_anotar: bool) -> bool:
     """Corre la verificación completa en un modo. Devuelve True si pasó."""
     persp = Perspectiva(
-        activa=con_perspectiva, inclinacion=cfg.sintetico.perspectiva.inclinacion
+        activa=con_perspectiva, inclinacion_grados=cfg.sintetico.perspectiva.inclinacion_grados
     )
     imagen, verdad = generar(cfg, perspectiva=persp)
 
-    titulo = "CON perspectiva (inclinación {:.2f})".format(persp.inclinacion) if con_perspectiva else "SIN perspectiva (cenital perfecta)"
+    titulo = "CON perspectiva (cámara inclinada {:.1f}°)".format(persp.inclinacion_grados) if con_perspectiva else "SIN perspectiva (cenital perfecta)"
     print("=" * 78)
     print("MODO: {}".format(titulo))
     print("=" * 78)

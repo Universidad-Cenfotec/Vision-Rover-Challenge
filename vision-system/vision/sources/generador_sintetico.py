@@ -46,6 +46,155 @@ except ImportError:  # como script suelto
 
 
 # --------------------------------------------------------------------------
+# La cámara
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class CamaraSintetica:
+    """Una cámara estenopeica real: dónde está, hacia dónde mira y sus intrínsecos.
+
+    Por qué una cámara y no una homografía inventada
+    ------------------------------------------------
+    Antes, el modo "con perspectiva" angostaba el borde superior de la imagen una
+    fracción del ancho. Eso deforma parecido a una cámara inclinada, pero **no es
+    una cámara**: no tiene centro, no tiene altura, y por lo tanto no hay rayos.
+
+    Sin rayos no se pueden simular las dos cosas que el sistema tiene que
+    resolver de verdad:
+
+    - el **paralaje**, que es que un objeto con altura se ve corrido porque su
+      rayo hasta la cámara cruza el plano del tablero en otro lado;
+    - la **oclusión**, que es que un objeto tapa a otro cuando se le pone en el
+      rayo.
+
+    Con una cámara de verdad las dos salen solas, y —lo que más importa— hay una
+    **verdad conocida** contra la cual verificarlas.
+
+    El sistema de coordenadas del mundo
+    -----------------------------------
+    `X = col · cell_mm`, `Y = −row · cell_mm`, `Z` hacia arriba desde el tablero.
+
+    El menos en `Y` no es un capricho: `row` crece hacia abajo en la imagen, y
+    una cámara real que mira hacia abajo invierte ese eje. Sin el menos, la
+    imagen saldría espejada — y un ArUco espejado no lo detecta nadie, porque no
+    coincide con ninguna entrada del diccionario.
+    """
+
+    posicion_mm: np.ndarray  # (3,) centro óptico en el mundo
+    objetivo_mm: np.ndarray  # (3,) punto del tablero al que apunta
+    matriz: np.ndarray  # (3,3) intrínsecos
+    ancho_px: int
+    alto_px: int
+    cell_mm: float
+
+    @property
+    def altura_mm(self) -> float:
+        return float(self.posicion_mm[2])
+
+    @property
+    def nadir_celdas(self) -> tuple[float, float]:
+        """La celda que queda justo debajo de la cámara.
+
+        Es el centro de la homotecia del paralaje: un objeto ahí no se corre
+        nada por alto que sea, y el corrimiento crece con la distancia a este
+        punto. Todo lo que tenga altura se corre **alejándose** de acá.
+        """
+        return (float(self.posicion_mm[0] / self.cell_mm),
+                float(-self.posicion_mm[1] / self.cell_mm))
+
+    def _rotacion(self) -> np.ndarray:
+        """Matriz de rotación mundo -> cámara, mirando al objetivo.
+
+        Se construye a mano y no con una función de OpenCV porque el caso
+        cenital —la cámara mirando exactamente hacia abajo— hace degenerar la
+        receta habitual de "arriba del mundo", que ahí queda paralela al eje
+        óptico.
+        """
+        z = self.objetivo_mm - self.posicion_mm
+        z = z / np.linalg.norm(z)
+        # Referencia: el "abajo" de la imagen tiene que caer del lado de `row`
+        # creciente, que en el mundo es -Y.
+        referencia = np.array([0.0, -1.0, 0.0])
+        if abs(float(np.dot(z, referencia))) > 0.999:  # mirando a lo largo de Y
+            referencia = np.array([0.0, 0.0, 1.0])
+        x = np.cross(referencia, z)
+        x = x / np.linalg.norm(x)
+        y = np.cross(z, x)
+        return np.vstack((x, y, z))
+
+    def proyectar(self, puntos_mm: np.ndarray) -> np.ndarray:
+        """Proyecta puntos del mundo (N,3) en mm a píxeles (N,2)."""
+        puntos = np.asarray(puntos_mm, dtype=np.float64).reshape(-1, 3)
+        rot = self._rotacion()
+        rvec, _ = cv2.Rodrigues(rot)
+        tvec = -rot @ self.posicion_mm.reshape(3, 1)
+        salida, _ = cv2.projectPoints(
+            puntos, rvec, tvec, self.matriz, np.zeros(5, dtype=np.float64)
+        )
+        return salida.reshape(-1, 2)
+
+    def celdas_a_mundo(self, celdas: np.ndarray, altura_mm: float = 0.0) -> np.ndarray:
+        """Pasa celdas (N,2) a puntos del mundo (N,3) a la altura indicada."""
+        celdas = np.asarray(celdas, dtype=np.float64).reshape(-1, 2)
+        return np.column_stack((
+            celdas[:, 0] * self.cell_mm,
+            -celdas[:, 1] * self.cell_mm,
+            np.full(len(celdas), float(altura_mm)),
+        ))
+
+    def proyectar_celdas(self, celdas: np.ndarray, altura_mm: float = 0.0) -> np.ndarray:
+        """Atajo: de celdas a píxeles, a la altura indicada."""
+        return self.proyectar(self.celdas_a_mundo(celdas, altura_mm))
+
+
+def camara_para(cfg: ConfigVision, inclinacion_grados: float = 0.0) -> CamaraSintetica:
+    """Arma la cámara a partir de la configuración.
+
+    La distancia focal **se deriva del encuadre** en vez de configurarse: se
+    elige la que hace que la cancha ocupe la imagen dejando el margen pedido,
+    igual que antes se derivaba el lado de celda en píxeles. Así el tamaño de
+    imagen sigue siendo lo configurable y no hay dos números que mantener
+    coherentes entre sí.
+
+    `inclinacion_grados` corre la cámara de lado manteniéndola apuntada al
+    centro del tablero. Es una inclinación **física**: el ángulo entre el eje
+    óptico y la vertical, que es lo que uno mediría con un transportador sobre
+    el soporte real.
+    """
+    s = cfg.sintetico
+    t = cfg.tablero
+
+    ancho_cancha_mm = t.cols * t.cell_mm
+    alto_cancha_mm = t.rows * t.cell_mm
+    centro = np.array([ancho_cancha_mm / 2.0, -alto_cancha_mm / 2.0, 0.0])
+
+    altura = float(s.altura_camara_mm)
+    # Focal que hace entrar la cancha con su margen, con la cámara cenital.
+    disponible_px = min(s.ancho_px - 2 * s.margen_px, s.alto_px - 2 * s.margen_px)
+    focal = disponible_px * altura / max(ancho_cancha_mm, alto_cancha_mm)
+
+    matriz = np.array([
+        [focal, 0.0, s.ancho_px / 2.0],
+        [0.0, focal, s.alto_px / 2.0],
+        [0.0, 0.0, 1.0],
+    ], dtype=np.float64)
+
+    # La inclinación corre la cámara de lado; sigue mirando al centro.
+    corrimiento = altura * math.tan(math.radians(inclinacion_grados))
+    posicion = centro + np.array([0.0, -corrimiento, altura])
+
+    return CamaraSintetica(
+        posicion_mm=posicion,
+        objetivo_mm=centro,
+        matriz=matriz,
+        ancho_px=s.ancho_px,
+        alto_px=s.alto_px,
+        cell_mm=t.cell_mm,
+    )
+
+
+# --------------------------------------------------------------------------
 # La verdad conocida
 # --------------------------------------------------------------------------
 
@@ -65,14 +214,29 @@ class MarcadorVerdad:
     theta_grados: float
     centro_px: tuple[float, float]
     esquinas_px: tuple[tuple[float, float], ...]
+    altura_mm: float = 0.0
+    col_en_plano: float = 0.0
+    row_en_plano: float = 0.0
+
+    @property
+    def paralaje_celdas(self) -> float:
+        """Cuánto separa el paralaje lo que se ve de dónde está de verdad.
+
+        Cero para cualquier cosa apoyada en el tablero. Para un objeto elevado,
+        es la distancia entre su celda real y la celda donde su rayo cruza el
+        plano del tablero, que es lo que el sistema mide mientras no exista la
+        corrección de paralaje.
+        """
+        return float(math.hypot(self.col_en_plano - self.col, self.row_en_plano - self.row))
 
 
 @dataclass(frozen=True, slots=True, eq=False)
 class VerdadTablero:
     """Todo lo que el generador sabe de la imagen que acaba de crear.
 
-    `eq=False` porque contiene una matriz de NumPy: comparar dos verdades con
-    `==` no tendría un resultado booleano claro, y no lo necesitamos.
+    `eq=False` porque contiene una cámara con matrices de NumPy adentro:
+    comparar dos verdades con `==` no tendría un resultado booleano claro, y no
+    lo necesitamos.
     """
 
     ancho_px: int
@@ -81,30 +245,33 @@ class VerdadTablero:
     rows: int
     cell_mm: float
     px_por_celda: float
-    origen_px: tuple[float, float]
-    homografia: np.ndarray  # celdas escaladas -> píxeles finales (identidad si no hay perspectiva)
+    camara: CamaraSintetica
     con_perspectiva: bool
     esquinas: tuple[MarcadorVerdad, ...]
     rovers: tuple[MarcadorVerdad, ...]
 
-    def celda_a_pixel(self, col: float, row: float) -> tuple[float, float]:
+    @property
+    def nadir_celdas(self) -> tuple[float, float]:
+        """La celda bajo la cámara. La verdad contra la que se verifica la pose."""
+        return self.camara.nadir_celdas
+
+    def celda_a_pixel(self, col: float, row: float, altura_mm: float = 0.0) -> tuple[float, float]:
         """Convierte una celda al píxel donde el generador la dibujó.
 
         Este es **el mapeo verdadero**: lo que el módulo de geometría tiene que
         llegar a invertir a partir de la imagen sola. Toda la verificación se
         apoya en esta función.
+
+        `altura_mm` es la altura sobre el tablero. Con 0 —lo habitual— devuelve
+        dónde cae un punto del piso. Con altura, devuelve dónde se ve un objeto
+        elevado, que es otro píxel: eso es el paralaje.
         """
-        punto = self.celdas_a_pixeles(np.array([[col, row]], dtype=np.float64))
+        punto = self.celdas_a_pixeles(np.array([[col, row]], dtype=np.float64), altura_mm)
         return (float(punto[0, 0]), float(punto[0, 1]))
 
-    def celdas_a_pixeles(self, celdas: np.ndarray) -> np.ndarray:
+    def celdas_a_pixeles(self, celdas: np.ndarray, altura_mm: float = 0.0) -> np.ndarray:
         """Versión vectorizada de `celda_a_pixel`. Recibe y devuelve (N, 2)."""
-        celdas = np.asarray(celdas, dtype=np.float64).reshape(-1, 2)
-        x0, y0 = self.origen_px
-        ideales = np.column_stack(
-            (x0 + celdas[:, 0] * self.px_por_celda, y0 + celdas[:, 1] * self.px_por_celda)
-        )
-        return _aplicar_homografia(self.homografia, ideales)
+        return self.camara.proyectar_celdas(celdas, altura_mm)
 
     def marcador(self, id_aruco: int) -> MarcadorVerdad | None:
         """Busca un marcador por ID, entre esquinas y rovers. Itera, no indexa."""
@@ -123,6 +290,17 @@ def _aplicar_homografia(h: np.ndarray, puntos: np.ndarray) -> np.ndarray:
     """Aplica una homografía 3x3 a un arreglo (N, 2)."""
     puntos = np.asarray(puntos, dtype=np.float64).reshape(-1, 1, 2)
     return cv2.perspectiveTransform(puntos, h).reshape(-1, 2)
+
+
+def _cuadrilatero_celdas(col: float, row: float, lado_celdas: float,
+                         theta_grados: float) -> np.ndarray:
+    """Las cuatro esquinas de un cuadrado en CELDAS, en orden TL, TR, BR, BL.
+
+    En celdas y no en píxeles porque ahora hay una cámara de por medio: primero
+    se sabe dónde está la cosa en el mundo y después se la proyecta. Antes las
+    dos cuentas estaban mezcladas.
+    """
+    return _cuadrilatero((col, row), lado_celdas, theta_grados)
 
 
 def _cuadrilatero(centro: tuple[float, float], lado_px: float, theta_grados: float) -> np.ndarray:
@@ -171,17 +349,21 @@ def _estampar(lienzo: np.ndarray, bitmap: np.ndarray, cuadrilatero: np.ndarray) 
 
 
 def _bitmap_marcador(diccionario, id_aruco: int, lado_px: int, borde_px: int) -> np.ndarray:
-    """Genera el marcador con su zona blanca alrededor.
+    """Genera el marcador con su zona blanca alrededor, en BGR.
 
     La zona blanca no es decorativa: el detector de ArUco necesita contraste en
     todo el contorno para encontrar el marcador. Sin ella, el marcador es
     invisible aunque esté perfectamente dibujado.
+
+    Sale en color porque la imagen sintética ahora es BGR, como la que entrega
+    la cámara real: los cubos tienen color y la fuente sintética tiene que
+    parecerse a la que va a reemplazar.
     """
     marcador = cv2.aruco.generateImageMarker(diccionario, id_aruco, lado_px)
     total = lado_px + 2 * borde_px
     lienzo = np.full((total, total), 255, np.uint8)
     lienzo[borde_px : borde_px + lado_px, borde_px : borde_px + lado_px] = marcador
-    return lienzo
+    return cv2.cvtColor(lienzo, cv2.COLOR_GRAY2BGR)
 
 
 # --------------------------------------------------------------------------
@@ -206,61 +388,48 @@ def generar(
     persp = perspectiva if perspectiva is not None else s.perspectiva
     lista_rovers = cfg.rovers_demo if rovers is None else rovers
 
-    # El lado de celda se deriva del tamaño de imagen para que la grilla entre
-    # con sus márgenes; el tablero queda centrado.
-    ppc = min(
-        (s.ancho_px - 2 * s.margen_px) / t.cols,
-        (s.alto_px - 2 * s.margen_px) / t.rows,
-    )
-    x0 = (s.ancho_px - t.cols * ppc) / 2.0
-    y0 = (s.alto_px - t.rows * ppc) / 2.0
+    inclinacion = persp.inclinacion_grados if persp.activa else 0.0
+    camara = camara_para(cfg, inclinacion)
 
-    def ideal(col: float, row: float) -> tuple[float, float]:
-        return (x0 + col * ppc, y0 + row * ppc)
+    # Cuántos píxeles mide una celda, para reportar y para dimensionar bitmaps.
+    # Con la cámara inclinada no es constante en toda la imagen, así que se toma
+    # la del centro del tablero, que es representativa.
+    ppc = _px_por_celda(camara, t)
 
-    lienzo = np.full((s.alto_px, s.ancho_px), s.color_fondo, np.uint8)
+    lienzo = np.full((s.alto_px, s.ancho_px, 3), s.color_fondo, np.uint8)
     if s.dibujar_grilla:
-        _dibujar_grilla(lienzo, t, s, ideal)
+        _dibujar_grilla(lienzo, t, s, camara)
 
     diccionario = diccionario_aruco(cfg.marcadores_esquina.nombre_diccionario)
-    borde_px = max(1, int(round(s.borde_blanco_celdas * ppc)))
 
     # --- marcadores de esquina --------------------------------------------
-    # Se dibujan derechos (theta = 90: su borde superior mira hacia arriba). Su
-    # orientación no se usa para nada; lo que ancla las coordenadas es su centro.
+    # Se dibujan derechos (theta = 90: su borde superior mira hacia arriba) y
+    # AL RAS del tablero. Su orientación no se usa para nada; lo que ancla las
+    # coordenadas es su centro, y su altura cero es lo que hace que la
+    # homografía del plano del tablero sea exacta para ellos.
     esquinas: list[MarcadorVerdad] = []
     for id_aruco, (col, row) in sorted(cfg.marcadores_esquina.disposicion.items()):
         esquinas.append(
             _dibujar_marcador(
-                lienzo, diccionario, id_aruco, col, row, 90.0,
-                s.lado_marcador_esquina_celdas, ppc, borde_px, ideal,
+                lienzo, camara, diccionario, id_aruco, col, row, 90.0,
+                s.lado_marcador_esquina_celdas, s.borde_blanco_celdas, ppc, 0.0,
             )
         )
 
     # --- rovers ------------------------------------------------------------
+    # A su altura REAL sobre el tablero. Antes se dibujaban al ras, que era
+    # cómodo y falso: el marcador del rover está a 90 mm y por lo tanto se ve
+    # corrido. Dibujarlo donde de verdad se ve es lo que permite medir cuánto
+    # cuesta no corregir el paralaje, y verificar la corrección cuando exista.
+    altura_rover = cfg.paralaje.altura_marcador_rover_mm
     marcadores_rover: list[MarcadorVerdad] = []
     for rover in lista_rovers:
         marcadores_rover.append(
             _dibujar_marcador(
-                lienzo, diccionario, rover.id, rover.col, rover.row, rover.theta,
-                s.lado_marcador_rover_celdas, ppc, borde_px, ideal,
+                lienzo, camara, diccionario, rover.id, rover.col, rover.row, rover.theta,
+                s.lado_marcador_rover_celdas, s.borde_blanco_celdas, ppc, altura_rover,
             )
         )
-
-    # --- inclinación de cámara --------------------------------------------
-    homografia = np.eye(3, dtype=np.float64)
-    if persp.activa and persp.inclinacion > 0:
-        homografia = _homografia_perspectiva(s.ancho_px, s.alto_px, persp.inclinacion)
-        lienzo = cv2.warpPerspective(
-            lienzo,
-            homografia,
-            (s.ancho_px, s.alto_px),
-            flags=cv2.INTER_LINEAR,
-            borderMode=cv2.BORDER_CONSTANT,
-            borderValue=int(s.color_fondo),
-        )
-        esquinas = [_reproyectar(m, homografia) for m in esquinas]
-        marcadores_rover = [_reproyectar(m, homografia) for m in marcadores_rover]
 
     # --- degradación opcional ---------------------------------------------
     if s.desenfoque_px > 0:
@@ -278,70 +447,83 @@ def generar(
         rows=t.rows,
         cell_mm=t.cell_mm,
         px_por_celda=ppc,
-        origen_px=(x0, y0),
-        homografia=homografia,
-        con_perspectiva=bool(persp.activa and persp.inclinacion > 0),
+        camara=camara,
+        con_perspectiva=bool(inclinacion > 0),
         esquinas=tuple(esquinas),
         rovers=tuple(marcadores_rover),
     )
     return lienzo, verdad
 
 
+def _px_por_celda(camara: CamaraSintetica, tablero) -> float:
+    """Cuántos píxeles mide una celda en el centro del tablero."""
+    centro = np.array([[tablero.cols / 2.0, tablero.rows / 2.0],
+                       [tablero.cols / 2.0 + 1.0, tablero.rows / 2.0]], dtype=np.float64)
+    p = camara.proyectar_celdas(centro)
+    return float(np.hypot(p[1, 0] - p[0, 0], p[1, 1] - p[0, 1]))
+
+
 def _dibujar_marcador(
-    lienzo, diccionario, id_aruco, col, row, theta, lado_celdas, ppc, borde_px, ideal
+    lienzo, camara, diccionario, id_aruco, col, row, theta,
+    lado_celdas, borde_celdas, ppc, altura_mm
 ) -> MarcadorVerdad:
-    """Estampa un marcador y devuelve la verdad de dónde quedó."""
-    centro = ideal(col, row)
-    lado_px = lado_celdas * ppc
+    """Estampa un marcador a la altura indicada y devuelve dónde quedó.
+
+    Primero se calcula el cuadrado en **celdas** —el mundo— y recién después se
+    lo proyecta con la cámara. Ese orden es el que hace que el paralaje aparezca
+    solo: un marcador a 90 mm se proyecta en otro lado que el mismo marcador al
+    ras, sin que haya que programar ninguna corrección.
+    """
     # El cuadrilátero que se estampa incluye la zona blanca; el que se guarda
     # como verdad es el del marcador en sí, que es lo que va a detectar OpenCV.
-    total_px = lado_px + 2 * borde_px
+    total_celdas = lado_celdas + 2 * borde_celdas
+    esquinas_celdas = _cuadrilatero_celdas(col, row, lado_celdas, theta)
+    total_esquinas = _cuadrilatero_celdas(col, row, total_celdas, theta)
+
+    esquinas_px = camara.proyectar_celdas(esquinas_celdas, altura_mm)
+    total_px = camara.proyectar_celdas(total_esquinas, altura_mm)
+    centro_px = camara.proyectar_celdas(np.array([[col, row]]), altura_mm)[0]
+
+    # Dónde PARECE estar sobre el tablero: el punto donde el rayo cámara-marcador
+    # cruza el plano del piso. Es una homotecia centrada en el nadir, y es
+    # exactamente lo que el sistema va a medir mientras el paralaje no se
+    # corrija. Guardarlo permite separar "el detector se equivocó" de "falta la
+    # corrección de paralaje", que son dos cosas muy distintas.
+    en_plano = _proyectar_al_plano(camara, col, row, altura_mm)
+
+    lado_bitmap = max(8, int(round(lado_celdas * ppc)))
+    borde_bitmap = max(1, int(round(borde_celdas * ppc)))
     _estampar(
         lienzo,
-        _bitmap_marcador(diccionario, id_aruco, int(round(lado_px)), borde_px),
-        _cuadrilatero(centro, total_px, theta),
+        _bitmap_marcador(diccionario, id_aruco, lado_bitmap, borde_bitmap),
+        total_px,
     )
-    esquinas = _cuadrilatero(centro, lado_px, theta)
     return MarcadorVerdad(
         id=id_aruco,
         col=col,
         row=row,
         theta_grados=theta,
-        centro_px=(centro[0], centro[1]),
-        esquinas_px=tuple((float(x), float(y)) for x, y in esquinas),
+        centro_px=(float(centro_px[0]), float(centro_px[1])),
+        esquinas_px=tuple((float(x), float(y)) for x, y in esquinas_px),
+        altura_mm=float(altura_mm),
+        col_en_plano=en_plano[0],
+        row_en_plano=en_plano[1],
     )
 
 
-def _reproyectar(m: MarcadorVerdad, homografia: np.ndarray) -> MarcadorVerdad:
-    """Lleva la verdad de un marcador a la imagen ya inclinada.
+def _proyectar_al_plano(camara, col, row, altura_mm) -> tuple[float, float]:
+    """Dónde cruza el plano del tablero el rayo que va de la cámara al objeto.
 
-    Se produce un objeto nuevo en vez de modificar el anterior: la verdad, como
-    el estado del mundo, es inmutable.
+    Es la homotecia del paralaje: centro en el nadir, factor `H/(H−h)`. Vale
+    para cualquier inclinación de cámara, porque el rayo solo depende del centro
+    óptico y no de hacia dónde mire.
     """
-    puntos = np.array((m.centro_px,) + tuple(m.esquinas_px), dtype=np.float64)
-    movidos = _aplicar_homografia(homografia, puntos)
-    return MarcadorVerdad(
-        id=m.id,
-        col=m.col,
-        row=m.row,
-        theta_grados=m.theta_grados,
-        centro_px=(float(movidos[0, 0]), float(movidos[0, 1])),
-        esquinas_px=tuple((float(x), float(y)) for x, y in movidos[1:]),
-    )
-
-
-def _homografia_perspectiva(ancho: int, alto: int, inclinacion: float) -> np.ndarray:
-    """Simula una cámara que no está perfectamente cenital.
-
-    Angosta el borde superior de la imagen, que es lo que se ve cuando la cámara
-    mira el tablero con algo de ángulo. La cámara real nunca va a estar perfecta,
-    y con una imagen perfectamente cenital la homografía se reduciría a una
-    escala: la verificación pasaría aunque la matemática estuviera mal.
-    """
-    d = inclinacion * ancho
-    origen = np.array([[0, 0], [ancho, 0], [ancho, alto], [0, alto]], dtype=np.float32)
-    destino = np.array([[d, 0], [ancho - d, 0], [ancho, alto], [0, alto]], dtype=np.float32)
-    return cv2.getPerspectiveTransform(origen, destino).astype(np.float64)
+    if altura_mm == 0.0:
+        return (float(col), float(row))
+    nadir_col, nadir_row = camara.nadir_celdas
+    k = camara.altura_mm / (camara.altura_mm - altura_mm)
+    return (float(nadir_col + (col - nadir_col) * k),
+            float(nadir_row + (row - nadir_row) * k))
 
 
 # --------------------------------------------------------------------------
@@ -401,15 +583,25 @@ class FuenteSintetica:
         self.cerrar()
 
 
-def _dibujar_grilla(lienzo, tablero, sintetico, ideal) -> None:
-    """Dibuja la grilla tenue. Es ayuda visual: no interviene en la detección."""
+def _dibujar_grilla(lienzo, tablero, sintetico, camara) -> None:
+    """Dibuja la grilla tenue. Es ayuda visual: no interviene en la detección.
+
+    Las líneas se proyectan por sus extremos porque una recta del mundo se ve
+    como una recta en la imagen: la cámara no la curva. Lo que sí la curvaría es
+    la distorsión del lente, que el generador no simula a propósito —el sistema
+    real la corrige antes de mirar nada, así que la imagen sintética representa
+    el cuadro **ya rectificado**.
+    """
     paso = max(1, sintetico.paso_grilla_celdas)
-    color = int(sintetico.color_grilla)
+    color = (int(sintetico.color_grilla),) * 3
+    lineas = []
     for col in range(0, tablero.cols + 1, paso):
-        p1 = tuple(int(round(v)) for v in ideal(col, 0))
-        p2 = tuple(int(round(v)) for v in ideal(col, tablero.rows))
-        cv2.line(lienzo, p1, p2, color, 1, cv2.LINE_AA)
+        lineas.append(((col, 0), (col, tablero.rows)))
     for row in range(0, tablero.rows + 1, paso):
-        p1 = tuple(int(round(v)) for v in ideal(0, row))
-        p2 = tuple(int(round(v)) for v in ideal(tablero.cols, row))
-        cv2.line(lienzo, p1, p2, color, 1, cv2.LINE_AA)
+        lineas.append(((0, row), (tablero.cols, row)))
+    for inicio, fin in lineas:
+        p = camara.proyectar_celdas(np.array([inicio, fin], dtype=np.float64))
+        cv2.line(lienzo,
+                 (int(round(p[0, 0])), int(round(p[0, 1]))),
+                 (int(round(p[1, 0])), int(round(p[1, 1]))),
+                 color, 1, cv2.LINE_AA)

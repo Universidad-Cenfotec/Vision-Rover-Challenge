@@ -198,10 +198,14 @@
     "ruido_sigma": 0.0,
     "_nota_degradacion": "Para acercar la imagen sintética a una foto real. En 0 la imagen es perfecta. Subirlos sirve para ver cuánto aguanta la detección antes de fallar.",
 
+    "altura_camara_mm": 2100.0,
+    "_NOTA_ALTURA": "Altura de la cámara sintética sobre el tablero. NO es un parámetro del sistema real —allá la altura se deduce de los cuatro marcadores—: es la altura que se SIMULA, y de ella salen el paralaje y las oclusiones de la imagen generada. Se pone en 2100 mm porque es la altura de montaje real con la Logitech C270, que es la mínima que deja entrar el tablero.",
+
     "perspectiva": {
       "activa": false,
-      "inclinacion": 0.12,
-      "_nota": "Simula una cámara que NO está perfectamente cenital, inclinando el tablero: el borde superior se angosta una fracción `inclinacion` del ancho de cada lado. Apagada por defecto. Encenderla importa para verificar de verdad: con una imagen perfectamente cenital la homografía se reduce a una escala y la prueba pasaría aunque la matemática estuviera mal. Además, la cámara real nunca va a estar perfectamente cenital."
+      "inclinacion_grados": 8.0,
+      "_nota": "Inclinación FÍSICA de la cámara: el ángulo entre su eje óptico y la vertical, que es lo que se mediría con un transportador sobre el soporte. La cámara se corre de lado `altura * tan(ángulo)` y sigue apuntando al centro del tablero. Apagada por defecto. Encenderla importa para verificar de verdad: con una cámara perfectamente cenital la homografía se reduce a una escala y la prueba pasaría aunque la matemática estuviera mal, y la cámara real nunca va a estar perfectamente cenital.",
+      "_POR_QUE_GRADOS_Y_NO_UNA_FRACCION": "Antes esto era `inclinacion: 0.12`, una fracción del ancho que se le angostaba al borde superior de la imagen. Deformaba parecido a una cámara inclinada pero NO era una cámara: no tenía centro ni altura, así que no había rayos, y sin rayos no hay paralaje ni oclusión que simular. Ahora hay una cámara estenopeica de verdad y el parámetro es el ángulo real."
     }
   },
 
