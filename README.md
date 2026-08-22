@@ -24,6 +24,7 @@ El objetivo es que los rovers encuentren los objetos, los transporten y los colo
 
 ## Contenidos:
 
+- [¿Qué es el reto?](https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/el_reto.md)
 - [Especificaciones del Robot](https://github.com/Universidad-Cenfotec/Vision-Robotic-Challenge/blob/main/robot.md)
 - [Reglamento del VIsion Rover Challenge](https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/reglamento.md)
 - [Armado del Robot](https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/armado)
