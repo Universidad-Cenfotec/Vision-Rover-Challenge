@@ -1,4 +1,4 @@
-<img src="armado.jpeg" width="400">
+<img src="armado.jpeg" width="600">
 
 # Armado de CenfoBot
 
