@@ -74,6 +74,14 @@
       "_nota_identidad": "El ID de este marcador es la identidad del rover en el contrato: los dos robots son negros e idénticos y solo el marcador los distingue. Los IDs 0-3 están reservados para las esquinas."
     }
   },
+  "publicacion": {
+    "_acerca_de": "Publicación de telemetría a los equipos. El transporte —abrir el puerto, aceptar clientes, la ranura de un mensaje por cliente— NO está en vision/: vive en contrato/publicador.py, compartido con el simulador, para que los dos se comporten idéntico. Acá solo va lo propio de este lado: el reloj y el puerto.",
+    "puerto": 2026,
+    "_NOTA_PUERTO": "⚠️ 2026 es el puerto OFICIAL y no se cambia. El simulador y el sistema real publican en el MISMO puerto, para que un equipo pase del simulador a la cancha sin tocar una línea de su código. Tiene que coincidir con DEFAULT_PORT de contrato/schema.py.",
+    "hz": 20.0,
+    "_nota_hz": "Cuántas veces por segundo se publica. Corre por temporizador PROPIO, independiente de la cámara: si un cuadro tarda de más, la publicación no se frena, vuelve a mandar el último estado bueno con su ts_ms de captura ya viejo. El equipo lo ve envejecer y decide. 20 Hz es lo que emite el simulador, así que los equipos ven la misma cadencia en los dos lados.",
+    "_POR_QUE_NO_A_LA_TASA_DE_LA_CAMARA": "Porque son dos relojes que no deben esperarse. La cámara entrega 30 cuadros por segundo y la detección corre a 51: publicar a la tasa de la cámara ataría la red al procesamiento y viceversa. Con temporizador propio, un cuadro lento no frena la publicación y un cliente lento no frena el procesamiento."
+  },
   "lugares": {
     "_acerca_de": "LUGARES FIJOS de la cancha: la esquina de salida y las tres zonas de acopio. Se DECLARAN, no se detectan (CLAUDE.md, sección 5): están siempre, no se mueven y no envejecen, así que no tiene sentido buscarlas en cada cuadro. Por eso viajan en el mensaje en listas separadas de los cubos, aunque compartan el color.",
     "_SIN_ESTO_NO_SE_PUEDE_PUBLICAR": "El contrato exige `start` y `depots` en CADA mensaje. Hasta que se declararon acá, el sistema de visión no podía emitir un mensaje válido: sabía dónde estaba cada objeto y no sabía adónde había que llevarlo.",

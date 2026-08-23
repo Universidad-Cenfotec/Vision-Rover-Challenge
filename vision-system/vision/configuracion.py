@@ -158,6 +158,22 @@ class DesfaseMarcadorRobot:
 
 
 @dataclass(frozen=True, slots=True)
+class Publicacion:
+    """Reloj y puerto de la publicación de telemetría.
+
+    El transporte no está acá: vive en `contrato/publicador.py`, compartido con
+    el simulador. Esto es solo lo propio de este lado.
+
+    El reloj es **propio y no el de la cámara**: son dos relojes que no deben
+    esperarse. Si un cuadro tarda de más, la publicación no se frena; si un
+    cliente tiene la red lenta, el procesamiento ni se entera.
+    """
+
+    puerto: int
+    hz: float
+
+
+@dataclass(frozen=True, slots=True)
 class Deposito:
     """Una zona de acopio: dónde está y de qué color."""
 
@@ -473,6 +489,7 @@ class ConfigVision:
     marcadores_esquina: MarcadoresEsquina
     elementos: Elementos
     lugares: Lugares
+    publicacion: Publicacion
     deteccion_rovers: DeteccionRovers
     deteccion_cubos: DeteccionCubos
     medicion_desfases: MedicionDesfases
@@ -629,6 +646,9 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
 
     elementos = _leer_elementos(d["elementos"])
 
+    pu = d["publicacion"]
+    publicacion = Publicacion(puerto=int(pu["puerto"]), hz=float(pu["hz"]))
+
     lu = d["lugares"]
     lugares = Lugares(
         start_col=float(lu["start"]["col"]),
@@ -739,6 +759,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         marcadores_esquina=marcadores,
         elementos=elementos,
         lugares=lugares,
+        publicacion=publicacion,
         deteccion_rovers=deteccion_rovers,
         deteccion_cubos=deteccion_cubos,
         medicion_desfases=medicion_desfases,
@@ -819,6 +840,10 @@ def revisar_config(cfg: ConfigVision) -> str | None:
             "deteccion_rovers.desfase_angular_grados = {} está fuera de [-360, 360]; "
             "es un ángulo, no una cantidad de vueltas".format(dr.desfase_angular_grados)
         )
+    if not (0 < cfg.publicacion.puerto < 65536):
+        return "publicacion.puerto fuera de rango"
+    if cfg.publicacion.hz <= 0:
+        return "publicacion.hz debe ser > 0"
     lug = cfg.lugares
     colores_cubo = set(cfg.elementos.cubos.colores)
     colores_deposito = [dep.color for dep in lug.depositos]
