@@ -1,7 +1,3 @@
-Revisé la carpeta. Actualmente contiene cuatro marcadores ArUco de **10 cm con IDs 0–3** y dos marcadores de **40 mm con IDs 10–11**, además del `README.md`.  El README existente ya introduce ArUco como marcadores visuales usados para identificación, posición y orientación.
-
-Te propongo este texto para sustituir o ampliar el `README.md`:
-
 # Códigos ArUco
 
 ## ¿Qué es ArUco?
