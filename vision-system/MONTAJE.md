@@ -208,8 +208,23 @@ equivocado sin que nada avise.
   detección de los cubos.
 - **Enfoque manual**, ajustado y luego dejado quieto.
 - Si se mueve la cámara después de calibrar, no pasa nada grave: el sistema se
-  reancla solo a los marcadores en el cuadro siguiente. Lo que **no** puede pasar
-  es que deje de ver alguno de los cuatro.
+  reancla solo a los marcadores en el cuadro siguiente.
+
+> ### Si se pierde un marcador durante la ronda
+>
+> **Con tres, el sistema sigue funcionando con la misma precisión.** Conserva la
+> geometría del último cuadro bueno —la cámara está atornillada, así que sigue
+> siendo válida— y usa los tres visibles para comprobar en cada cuadro que la
+> cámara no se movió. Si se despega un marcador a mitad de ronda, no se pierde
+> la ronda.
+>
+> **Con dos o menos, se queda sin coordenadas.** No hay con qué comprobar nada,
+> así que conserva el último estado bueno y le hace crecer la edad hasta que
+> vuelva a ver tres.
+>
+> Igual, **montar los cuatro bien sigue siendo el trabajo**: con tres el sistema
+> aguanta, no funciona mejor. Y si alguien mueve la cámara mientras falta uno, se
+> detiene y avisa, porque ahí sí las coordenadas dejarían de valer.
 
 ---
 
@@ -219,6 +234,8 @@ Cuando la cancha esté montada y la cámara puesta:
 
 1. **Los cuatro marcadores se detectan.** El sistema tiene que encontrar los IDs
    0, 1, 2 y 3. Si falta alguno, avisa con un mensaje que dice cuáles vio.
+   Arrancar con tres **no alcanza**: para conservar la geometría hace falta
+   haberla establecido antes con los cuatro.
 2. **El origen está donde debe.** Poner algo en la esquina de salida y confirmar
    que el sistema lo reporta cerca de `col ≈ 0, row ≈ 0`.
 3. **La orientación no está espejada.** Mover un objeto **hacia la derecha** y

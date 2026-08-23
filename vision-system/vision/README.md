@@ -81,7 +81,7 @@ su propio README con el detalle:
 | Paquete | Lado | Rol | Estado |
 |---|---|---|---|
 | `sources/` | Productor | De dónde salen las imágenes | 🟢 **cámara USB real** y **generador sintético con cámara estenopeica**, intercambiables |
-| `geometry/` | Productor | Píxeles → celdas | 🟢 **coordenadas ArUco**, **corrección de distorsión**, **pose de cámara** y **paralaje** |
+| `geometry/` | Productor | Píxeles → celdas | 🟢 **coordenadas ArUco**, **corrección de distorsión**, **pose de cámara**, **paralaje** y **degradación con 3 marcadores** |
 | `detectors/` | Productor | Qué hay y dónde | 🟢 **rovers** por marcador y **cubos** por color |
 | `tracking/` | Productor | Identidad, oclusión y edad | 🟢 **memoria entre cuadros** |
 | `publish/` | Consumidor | Publicación TCP/NDJSON | 🟢 **reloj propio y último-valor-gana** (el transporte lo comparte con el contrato) |

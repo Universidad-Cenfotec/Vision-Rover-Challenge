@@ -213,6 +213,29 @@ estado bueno** y sigue publicando. Nunca se cae a mitad de una ronda.
 La lógica es simple: un dato de hace 300 milisegundos, marcado como viejo, le
 sirve mucho más a un equipo que un silencio repentino.
 
+Pero "falla abierto" es la red de seguridad, no la primera respuesta. Casi todo
+lo que puede salir mal tiene un comportamiento **definido y verificado**, no
+supuesto:
+
+| Qué falla | Qué hace el sistema | Cuesta |
+|---|---|---|
+| Falta **un** marcador de esquina | conserva la geometría y la **verifica** con los tres visibles | **nada**: 0,52 mm, igual que con cuatro |
+| Faltan **dos o más** | falla abierto: no hay con qué verificar | la edad crece |
+| **Alguien mueve la cámara** con los cuatro | se reancla solo en el cuadro siguiente | nada |
+| **Alguien mueve la cámara** faltando uno | lo detecta por el desvío de los tres, y se detiene | la edad crece |
+| Un **rover** se tapa | conserva su posición, `age_ms` crece | nada |
+| Un **cubo** se tapa parcialmente | lo ubica igual, ajustando el modelo del cubo | 4,88 mm con el 22 % tapado |
+| Un cubo se tapa **demasiado** | **admite que no sabe** y el seguimiento conserva la última buena | la edad crece |
+| El **procesamiento** se rompe | sigue publicando; el dato envejece a la vista | la edad crece |
+| Un **cliente** se pone lento | se le pisan los mensajes viejos | nunca frena al sistema |
+
+Las tres frases que resumen el criterio:
+
+- **Un objeto tapado no parpadea**: conserva su posición y envejece.
+- **Cuando el sistema no sabe, lo dice**, en vez de inventar un número.
+- **Nunca se calla**: el silencio más largo medido, con el procesamiento roto a
+  propósito durante seis segundos, fue de **0,05 s** — un período de publicación.
+
 ---
 
 ## 4. Arquitectura: productores, interfaz, consumidores

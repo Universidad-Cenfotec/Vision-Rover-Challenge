@@ -30,6 +30,23 @@ marcadores no probaría nada. Corre en dos modos, con y sin inclinación de
 cámara, y devuelve código de salida distinto de cero si algún grupo se pasa del
 umbral.
 
+#### Y un tercer bloque: la degradación
+
+Además comprueba **qué pasa si se pierde un marcador de esquina**, tapándolos de
+verdad sobre la imagen —agrandando el cuadrilátero para tapar también la zona
+blanca, que es exactamente cómo se pierde un marcador en la cancha real—.
+
+| Situación | Qué se exige |
+|---|---|
+| Los cuatro visibles | recalcula, 0,520 mm |
+| Uno tapado | conserva y verifica: **0,520 mm**, la misma precisión |
+| Dos tapados | **rechaza**: no hay con qué comprobar nada |
+| Uno tapado y la cámara movida 0,5° o 2° | **rechaza**: los tres visibles la delatan |
+| Uno tapado y la cámara movida 0,1° | acepta, y es correcto: son 0,62 mm de error |
+
+El detalle de por qué con tres se conserva en vez de reajustar está en
+[`../geometry/README.md`](../geometry/README.md).
+
 ### `verificar_rovers.py`
 
 Verifica la **detección de rovers** contra la misma verdad conocida: genera
