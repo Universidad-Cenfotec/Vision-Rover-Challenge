@@ -44,16 +44,12 @@ from __future__ import annotations
 
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 try:  # como paquete
     from .configuracion import ConfigVision
-    from .detectors.cubos import CuboDetectado
-    from .detectors.rovers import RoverDetectado
 except ImportError:  # como script suelto
     from vision.configuracion import ConfigVision  # type: ignore[no-redef]
-    from vision.detectors.cubos import CuboDetectado  # type: ignore[no-redef]
-    from vision.detectors.rovers import RoverDetectado  # type: ignore[no-redef]
 
 # `contrato/` es hermana de `vision/`, no está adentro. Se la agrega al camino de
 # búsqueda para poder importarla sin instalar nada: el contrato se entrega suelto
@@ -75,8 +71,8 @@ class RoverEnMundo:
 
     `age_ms` es cuánto hace que no se lo ve **de verdad**. En cero significa que
     se lo acaba de detectar; creciendo, que está tapado y se está conservando su
-    última posición conocida. Mientras no exista `tracking/` siempre vale cero,
-    porque no hay memoria entre cuadros que pueda hacerlo crecer.
+    última posición conocida. Lo hace crecer el seguidor de `tracking/`, que es
+    el único que tiene memoria entre cuadros.
     """
 
     id: int
@@ -116,42 +112,6 @@ class EstadoMundo:
             raise ValueError(
                 "fase desconocida {!r}; las válidas son {}".format(self.fase, list(FASES))
             )
-
-
-def desde_detecciones(
-    ts_ms: int,
-    fase: str,
-    rovers: tuple[RoverDetectado, ...],
-    cubos: tuple[CuboDetectado, ...],
-) -> EstadoMundo:
-    """Arma un estado del mundo con lo detectado en un cuadro.
-
-    Es la frontera entre "lo que se vio" y "lo que se publica": acá se descarta
-    todo lo que es asunto interno —el residuo del ajuste, la pose cruda del
-    marcador, el área de la mancha— y queda solo lo que el contrato promete.
-
-    **Los cubos no confiables no entran.** Cuando el ajuste no encaja —un rover
-    tapando casi todo el cubo—, la posición puede errar más que no decir nada.
-    Omitirlo acá es lo correcto: el seguimiento, cuando exista, va a conservar su
-    última posición buena con la edad creciendo, que es lo que manda el contrato
-    para un objeto ocluido. Publicar una posición inventada sería peor que las
-    dos cosas.
-
-    Todavía no hay memoria entre cuadros, así que las edades salen en cero. Eso
-    es honesto: hoy todo lo que se publica es de este cuadro.
-    """
-    return EstadoMundo(
-        ts_ms=int(ts_ms),
-        fase=fase,
-        rovers=tuple(
-            RoverEnMundo(id=r.id, col=r.col, row=r.row, theta_grados=r.theta_grados)
-            for r in rovers
-        ),
-        cubos=tuple(
-            CuboEnMundo(color=c.color, col=c.col, row=c.row)
-            for c in cubos if c.confiable
-        ),
-    )
 
 
 def a_mensaje(estado: EstadoMundo, cfg: ConfigVision, seq: int) -> schema.Mensaje:

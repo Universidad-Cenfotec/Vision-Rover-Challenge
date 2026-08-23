@@ -53,8 +53,9 @@ try:  # como paquete
     from .geometry.distorsion import (
         ErrorCalibracion, FuenteRectificada, Rectificador, comparar_con_camara, elegir_perfil,
     )
-    from .mundo import FASES, desde_detecciones
+    from .mundo import FASES
     from .publish.telemetria import PublicadorTelemetria
+    from .tracking.seguimiento import Seguidor
     from .sources.camara import ErrorCamara, FuenteCamara
     from .sources.generador_sintetico import FuenteSintetica
 except ImportError:  # como script suelto
@@ -69,8 +70,9 @@ except ImportError:  # como script suelto
     from vision.geometry.distorsion import (  # type: ignore[no-redef]
         ErrorCalibracion, FuenteRectificada, Rectificador, comparar_con_camara, elegir_perfil,
     )
-    from vision.mundo import FASES, desde_detecciones  # type: ignore[no-redef]
+    from vision.mundo import FASES  # type: ignore[no-redef]
     from vision.publish.telemetria import PublicadorTelemetria  # type: ignore[no-redef]
+    from vision.tracking.seguimiento import Seguidor  # type: ignore[no-redef]
     from vision.sources.camara import ErrorCamara, FuenteCamara  # type: ignore[no-redef]
     from vision.sources.generador_sintetico import FuenteSintetica  # type: ignore[no-redef]
 
@@ -143,16 +145,24 @@ def abrir_fuente(cfg: ConfigVision, args):
     return fuente, "cámara {} ({}x{})".format(perfil.camara, ancho, alto)
 
 
-def procesar(cuadro, cfg, matriz_camara, fase):
+def procesar(cuadro, cfg, matriz_camara, fase, seguidor):
     """De un cuadro al estado del mundo. Lanza si la geometría no se puede armar.
 
     Una sola pasada del detector de ArUco por cuadro: el mismo resultado sirve
     para armar las coordenadas y para encontrar los rovers.
+
+    El estado sale del **seguidor** y no de las detecciones sueltas, porque es
+    él quien tiene la memoria: si algo no se ve en este cuadro, conserva su
+    última posición buena y le hace crecer la edad, en vez de que desaparezca.
+
+    Ojo con el orden: si esta función lanza, el seguidor **no se entera** de que
+    hubo un cuadro. Es lo correcto: un cuadro que no se pudo procesar no es una
+    observación, y la edad de todos los objetos tiene que seguir creciendo.
     """
     detectados = detectar_marcadores(cuadro.imagen, cfg.marcadores_esquina.nombre_diccionario)
     sistema = construir_sistema(cuadro.imagen, cfg, detectados)
     pose = pose_camara(sistema, matriz_camara)
-    return desde_detecciones(
+    return seguidor.actualizar(
         ts_ms=cuadro.ts_ms,
         fase=fase,
         rovers=detectar_rovers(detectados, sistema, cfg, pose),
@@ -200,6 +210,7 @@ def main(argv: list[str] | None = None) -> int:
         matriz = fuente.verdad.camara.matriz
 
     arbitro = Arbitro(args.fase)
+    seguidor = Seguidor(cfg)
     publicador = PublicadorTelemetria(cfg, avisar=lambda t: print(t, flush=True))
     salir = threading.Event()
 
@@ -239,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
             # sigue. La publicación continúa emitiendo el último estado bueno,
             # que envejece a la vista de todos. El sistema no se calla nunca.
             try:
-                publicador.actualizar(procesar(cuadro, cfg, matriz, arbitro.fase))
+                publicador.actualizar(procesar(cuadro, cfg, matriz, arbitro.fase, seguidor))
             except ErrorGeometria as exc:
                 fallos += 1
                 ultimo_error = str(exc).split(".")[0]
@@ -251,10 +262,11 @@ def main(argv: list[str] | None = None) -> int:
                 proximo_informe += 5.0
                 edad = publicador.edad_del_estado_ms()
                 print("[estado] fase={} cuadros={} fallos={} emitidos={} clientes={} "
-                      "pisados={} fps={:.1f} edad={}".format(
+                      "pisados={} fps={:.1f} edad={} conservados={}/{}".format(
                           arbitro.fase, cuadros, fallos, publicador.emitidos,
                           publicador.clientes, publicador.pisados, fuente.fps_real,
-                          "{} ms".format(edad) if edad is not None else "sin estado"),
+                          "{} ms".format(edad) if edad is not None else "sin estado",
+                          seguidor.conservados_rover, seguidor.conservados_cubo),
                       flush=True)
                 if ultimo_error:
                     print("[aviso] último problema: {}".format(ultimo_error), flush=True)

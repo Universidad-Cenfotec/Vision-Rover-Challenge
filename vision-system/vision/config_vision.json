@@ -74,6 +74,14 @@
       "_nota_identidad": "El ID de este marcador es la identidad del rover en el contrato: los dos robots son negros e idénticos y solo el marcador los distingue. Los IDs 0-3 están reservados para las esquinas."
     }
   },
+  "seguimiento": {
+    "_acerca_de": "Seguimiento entre cuadros: memoria de la última observación buena de cada objeto, y la EDAD que el contrato publica. Es lo que hace que un objeto tapado no parpadee entre existir y no existir.",
+    "_NO_HAY_PROBLEMA_DE_ASOCIACION": "Acá NO hace falta un seguidor de los clásicos, y conviene entender por qué: en este reto CADA OBJETO TRAE SU PROPIA IDENTIDAD. El rover la trae en el ID de su marcador ArUco y el cubo en su color, y no hay dos del mismo. O sea que no hay que adivinar qué detección de este cuadro corresponde a cuál del anterior —que es el problema difícil de todo seguimiento— porque la respuesta viene escrita en el objeto. Lo que queda es memoria y edad, que es mucho más simple y mucho más confiable.",
+    "edad_maxima_ms": 60000,
+    "_NOTA_EDAD_MAXIMA": "Después de este tiempo sin una observación buena, el objeto se saca de la lista. OJO: esto NO es para manejar oclusiones —para eso está la edad, y el contrato promete que un objeto tapado NO desaparece—. Es para barrer FANTASMAS: una detección espuria que nunca se repite, o un objeto que de verdad se fue de la cancha. Sesenta segundos son generosos a propósito: una ronda dura minutos y una oclusión normal dura segundos, así que una oclusión legítima nunca llega a este límite.",
+    "refrescar_con_cubos_no_confiables": false,
+    "_NOTA_NO_CONFIABLES": "Si una detección de cubo marcada como NO confiable debe refrescar la posición y la edad. En false —lo correcto— no la refresca: se conserva la última posición buena y la edad sigue creciendo. Es exactamente lo que pide el contrato para un objeto ocluido, y es honesto: una detección no confiable dice 'el cubo está por acá' pero no 'está acá'. Poner true haría que el sistema publique posiciones que él mismo considera dudosas, con edad cero, o sea presentándolas como frescas y seguras."
+  },
   "publicacion": {
     "_acerca_de": "Publicación de telemetría a los equipos. El transporte —abrir el puerto, aceptar clientes, la ranura de un mensaje por cliente— NO está en vision/: vive en contrato/publicador.py, compartido con el simulador, para que los dos se comporten idéntico. Acá solo va lo propio de este lado: el reloj y el puerto.",
     "puerto": 2026,

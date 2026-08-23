@@ -158,6 +158,24 @@ class DesfaseMarcadorRobot:
 
 
 @dataclass(frozen=True, slots=True)
+class Seguimiento:
+    """Memoria entre cuadros: la última observación buena y la edad.
+
+    Acá **no hay problema de asociación**, que es el problema difícil de todo
+    seguimiento. Cada objeto de este reto trae su propia identidad —el rover en
+    el ID de su marcador, el cubo en su color— así que no hay que adivinar qué
+    detección de este cuadro corresponde a cuál del anterior: viene escrito.
+
+    `edad_maxima_ms` no es para oclusiones —para eso está la edad, y el contrato
+    promete que un objeto tapado no desaparece— sino para barrer **fantasmas**:
+    detecciones espurias que nunca se repiten, u objetos que de verdad se fueron.
+    """
+
+    edad_maxima_ms: int
+    refrescar_con_cubos_no_confiables: bool
+
+
+@dataclass(frozen=True, slots=True)
 class Publicacion:
     """Reloj y puerto de la publicación de telemetría.
 
@@ -489,6 +507,7 @@ class ConfigVision:
     marcadores_esquina: MarcadoresEsquina
     elementos: Elementos
     lugares: Lugares
+    seguimiento: Seguimiento
     publicacion: Publicacion
     deteccion_rovers: DeteccionRovers
     deteccion_cubos: DeteccionCubos
@@ -646,6 +665,12 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
 
     elementos = _leer_elementos(d["elementos"])
 
+    sg = d["seguimiento"]
+    seguimiento = Seguimiento(
+        edad_maxima_ms=int(sg["edad_maxima_ms"]),
+        refrescar_con_cubos_no_confiables=bool(sg["refrescar_con_cubos_no_confiables"]),
+    )
+
     pu = d["publicacion"]
     publicacion = Publicacion(puerto=int(pu["puerto"]), hz=float(pu["hz"]))
 
@@ -759,6 +784,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         marcadores_esquina=marcadores,
         elementos=elementos,
         lugares=lugares,
+        seguimiento=seguimiento,
         publicacion=publicacion,
         deteccion_rovers=deteccion_rovers,
         deteccion_cubos=deteccion_cubos,
@@ -840,6 +866,8 @@ def revisar_config(cfg: ConfigVision) -> str | None:
             "deteccion_rovers.desfase_angular_grados = {} está fuera de [-360, 360]; "
             "es un ángulo, no una cantidad de vueltas".format(dr.desfase_angular_grados)
         )
+    if cfg.seguimiento.edad_maxima_ms <= 0:
+        return "seguimiento.edad_maxima_ms debe ser > 0"
     if not (0 < cfg.publicacion.puerto < 65536):
         return "publicacion.puerto fuera de rango"
     if cfg.publicacion.hz <= 0:
