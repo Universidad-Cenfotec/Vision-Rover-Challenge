@@ -56,6 +56,7 @@ try:  # como paquete
     from .mundo import FASES
     from .publish.telemetria import PublicadorTelemetria
     from .tracking.seguimiento import Seguidor
+    from .vista import Vista
     from .sources.camara import ErrorCamara, FuenteCamara
     from .sources.generador_sintetico import FuenteSintetica
 except ImportError:  # como script suelto
@@ -73,10 +74,26 @@ except ImportError:  # como script suelto
     from vision.mundo import FASES  # type: ignore[no-redef]
     from vision.publish.telemetria import PublicadorTelemetria  # type: ignore[no-redef]
     from vision.tracking.seguimiento import Seguidor  # type: ignore[no-redef]
+    from vision.vista import Vista  # type: ignore[no-redef]
     from vision.sources.camara import ErrorCamara, FuenteCamara  # type: ignore[no-redef]
     from vision.sources.generador_sintetico import FuenteSintetica  # type: ignore[no-redef]
 
 BASE_VISION = os.path.dirname(os.path.abspath(__file__))
+
+
+def primera_altura(fuente, tiempo_max: float = 5.0) -> int:
+    """Alto en píxeles del primer cuadro que entregue la fuente.
+
+    La vista lo necesita para escalar la tipografía del panel: el mismo tamaño
+    de letra se lee bien en 720p y queda diminuto en 1080p.
+    """
+    limite = time.monotonic() + tiempo_max
+    while time.monotonic() < limite:
+        cuadro = fuente.leer()
+        if cuadro is not None:
+            return int(cuadro.imagen.shape[0])
+        time.sleep(0.01)
+    return 720
 
 #: Transiciones válidas de la ronda. La visión es árbitro y esta es su voz.
 _TRANSICIONES = {
@@ -151,6 +168,10 @@ def procesar(cuadro, cfg, matriz_camara, fase, seguidor, anclaje):
     Una sola pasada del detector de ArUco por cuadro: el mismo resultado sirve
     para armar las coordenadas y para encontrar los rovers.
 
+    Devuelve `(sistema de coordenadas, estado del mundo)`. El sistema se devuelve
+    porque la vista lo necesita para dibujar celdas sobre la imagen; el estado es
+    lo único que cruza hacia los consumidores.
+
     El estado sale del **seguidor** y no de las detecciones sueltas, porque es
     él quien tiene la memoria: si algo no se ve en este cuadro, conserva su
     última posición buena y le hace crecer la edad, en vez de que desaparezca.
@@ -165,7 +186,7 @@ def procesar(cuadro, cfg, matriz_camara, fase, seguidor, anclaje):
     # o si los tres la desmienten, lanza y el falla-abierto se hace cargo.
     sistema = anclaje.actualizar(cuadro.imagen, detectados)
     pose = pose_camara(sistema, matriz_camara)
-    return seguidor.actualizar(
+    return sistema, seguidor.actualizar(
         ts_ms=cuadro.ts_ms,
         fase=fase,
         rovers=detectar_rovers(detectados, sistema, cfg, pose),
@@ -199,6 +220,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fase", choices=FASES, default="IDLE", help="fase inicial")
     parser.add_argument("--duracion", type=float, default=0.0,
                         help="segundos a correr; 0 = hasta 'quit' o Ctrl-C")
+    parser.add_argument("--ventana", action="store_true",
+                        help="abrir la vista en vivo: la imagen con lo detectado encima")
+    parser.add_argument("--ventana-hz", type=float, default=12.0,
+                        help="cuántas veces por segundo refrescar la vista")
     args = parser.parse_args(argv)
 
     cfg = cargar_config(args.config)
@@ -215,6 +240,11 @@ def main(argv: list[str] | None = None) -> int:
     arbitro = Arbitro(args.fase)
     seguidor = Seguidor(cfg)
     anclaje = AnclajeCancha(cfg)
+    vista = None
+    if args.ventana:
+        # La vista es un CONSUMIDOR: solo lee. Si se apaga, el sistema sigue
+        # igual, y por eso puede refrescarse a su propio ritmo sin frenar nada.
+        vista = Vista(cfg, alto_imagen=primera_altura(fuente), hz=args.ventana_hz)
     publicador = PublicadorTelemetria(cfg, avisar=lambda t: print(t, flush=True))
     salir = threading.Event()
 
@@ -238,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
                          name="teclado", daemon=True).start()
 
     cuadros = fallos = 0
+    ultimo_estado = None
     ultimo_error = ""
     proximo_informe = time.monotonic() + 5.0
     fin = time.monotonic() + args.duracion if args.duracion > 0 else float("inf")
@@ -249,18 +280,37 @@ def main(argv: list[str] | None = None) -> int:
                 time.sleep(0.005)
                 continue
             cuadros += 1
+            sistema_actual = None
             # ---- falla abierto -------------------------------------------
             # Si un cuadro no se puede procesar, NO se toca la casilla y se
             # sigue. La publicación continúa emitiendo el último estado bueno,
             # que envejece a la vista de todos. El sistema no se calla nunca.
             try:
-                publicador.actualizar(procesar(cuadro, cfg, matriz, arbitro.fase, seguidor, anclaje))
+                sistema_actual, estado = procesar(
+                    cuadro, cfg, matriz, arbitro.fase, seguidor, anclaje)
+                publicador.actualizar(estado)
+                ultimo_estado = estado
             except ErrorGeometria as exc:
                 fallos += 1
                 ultimo_error = str(exc).split(".")[0]
             except Exception as exc:  # noqa: BLE001 — a propósito: nada tumba la ronda
                 fallos += 1
                 ultimo_error = "{}: {}".format(type(exc).__name__, exc)
+
+            # ---- la vista ------------------------------------------------
+            if vista is not None and vista.toca_dibujar(time.monotonic()):
+                vista.dibujar(cuadro.imagen, sistema_actual, ultimo_estado, {
+                    "fase": arbitro.fase, "sintetico": args.sintetico,
+                    "clientes": publicador.clientes, "emitidos": publicador.emitidos,
+                    "fps": fuente.fps_real, "fallos": fallos,
+                    "esquinas_visibles": anclaje.esquinas_visibles,
+                    "desvio_mm": anclaje.desvio_mm,
+                })
+                comando = vista.tecla()
+                if comando == "quit":
+                    salir.set()
+                elif comando:
+                    print("[fase] " + arbitro.intentar(comando), flush=True)
 
             if time.monotonic() >= proximo_informe:
                 proximo_informe += 5.0
@@ -284,6 +334,8 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        if vista is not None:
+            vista.cerrar()
         publicador.detener()
         fuente.cerrar()
         print("\nSistema detenido. Cuadros={} fallos={} mensajes publicados={}".format(

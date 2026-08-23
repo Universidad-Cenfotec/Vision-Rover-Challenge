@@ -230,7 +230,15 @@ equivocado sin que nada avise.
 
 ## 6. Comprobación antes de la primera ronda
 
-Cuando la cancha esté montada y la cámara puesta:
+Cuando la cancha esté montada y la cámara puesta, **abrí la vista en vivo**:
+
+```bash
+python -m vision.sistema --ventana
+```
+
+Muestra la imagen de la cámara con todo lo que el sistema deduce dibujado
+encima. Los cuatro pasos de abajo se comprueban **mirando**, sin leer números en
+otra terminal:
 
 1. **Los cuatro marcadores se detectan.** El sistema tiene que encontrar los IDs
    0, 1, 2 y 3. Si falta alguno, avisa con un mensaje que dice cuáles vio.
@@ -240,9 +248,16 @@ Cuando la cancha esté montada y la cámara puesta:
    que el sistema lo reporta cerca de `col ≈ 0, row ≈ 0`.
 3. **La orientación no está espejada.** Mover un objeto **hacia la derecha** y
    confirmar que `col` **aumenta**. Después moverlo **hacia abajo** y confirmar
-   que `row` **aumenta**.
+   que `row` **aumenta**. En la vista, los **ejes azules** salen del marcador 0
+   hacia donde crecen `col` y `row`: si apuntan al lado equivocado, se ve sin
+   mover nada.
 4. **Las medidas coinciden.** Medir una distancia conocida con la cinta y
    comparar contra lo que reporta el sistema. Una celda son 20 mm.
+5. **La grilla dibujada cae sobre la cuadrícula del tablero.** Es la
+   comprobación más directa de todas y no necesita ningún objeto: si las líneas
+   que dibuja la vista coinciden con las del tablero real, el sistema de
+   coordenadas está bien. Si están corridas, rotadas o inclinadas, hay un
+   problema de montaje.
 
 > El paso 3 es el que atrapa el error de montaje más probable: marcadores
 > pegados en orden antihorario en vez de horario. Con los cuatro detectados y

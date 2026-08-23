@@ -322,6 +322,7 @@ Vision-Rover-Challenge/              # raíz del repositorio (fork de CENFOTEC)
         │
         ├── sistema.py               # ◄── EL PROGRAMA: encadena todo y se enciende
         ├── mundo.py                 # la frontera: el estado del mundo, inmutable
+        ├── vista.py                 # consumidor: la ventana en vivo
         │
         ├── detectors/               # productor: qué hay y dónde
         │   ├── rovers.py            #   rovers por su marcador: celda y ángulo
@@ -607,10 +608,27 @@ Esto es lo que hace todo: mira, deduce y publica.
 ```bash
 .venv/bin/python -m vision.sistema                # con la cámara real
 .venv/bin/python -m vision.sistema --sintetico    # sin cámara, con imágenes generadas
+.venv/bin/python -m vision.sistema --ventana      # además, la vista en vivo
 ```
 
 Mientras corre, se le escribe por teclado: `ready`, `start`, `stop`, `quit`. La
 visión es árbitro y esos comandos son su voz.
+
+### La vista en vivo
+
+`--ventana` abre una ventana con **la imagen de la cámara y lo que el sistema
+dedujo, dibujado encima**: los cuatro marcadores, la grilla de celdas
+reproyectada, cada rover con su flecha de orientación y cada cubo con su base,
+etiquetados con **la celda exacta que se está publicando**. Lo que se ve ahí es
+lo que reciben los equipos.
+
+Es la forma más rápida de encontrar un problema: si la grilla dibujada no cae
+sobre la cuadrícula del tablero, la geometría está mal; si un cubo no aparece,
+no se está detectando; si algo se pone ámbar, está viejo y su edad está creciendo.
+
+Es un **consumidor**: solo lee, se refresca a su propio reloj y **no le cuesta
+nada al procesamiento** —medido, 179 cuadros en 6 segundos con y sin ventana—.
+Desde la ventana se maneja con `r` ready · `s` start · `f` stop · `q` salir.
 
 > **Sin argumentos abre la cámara.** Lo sintético hay que **pedirlo**, y cuando
 > corre así el sistema lo repite en pantalla en un cartel imposible de pasar por
@@ -734,6 +752,7 @@ va engrosando. Así siempre hay algo que funciona y se puede verificar.
 | **Seguimiento** (`vision/tracking/`) | Memoria entre cuadros: un objeto tapado conserva su posición y su edad crece, en vez de desaparecer. Acá **no hay problema de asociación**, porque cada objeto trae su identidad. |
 | **Publicación** (`vision/publish/`) | TCP/NDJSON en el 2026, con reloj propio y último-valor-gana. El transporte lo comparte con el simulador. |
 | **El sistema completo** (`vision/sistema.py`) | El programa que se enciende: elige la fuente, corre el bucle, falla abierto y arbitra las fases. |
+| **La vista en vivo** (`vision/vista.py`) | Ventana con la imagen y lo detectado encima, etiquetado con la celda publicada. Es un consumidor: solo lee y no le cuesta nada al procesamiento. |
 | **Herramientas de puesta a punto** (`vision/tools/`) | Nueve: diagnóstico de cámara, generación de los PDF, calibración, medición de precisión, medición de desfases, y cuatro verificaciones contra verdad conocida —geometría, rovers, cubos y seguimiento—. |
 
 **Precisión medida sobre hardware real.** El criterio era **error máximo por

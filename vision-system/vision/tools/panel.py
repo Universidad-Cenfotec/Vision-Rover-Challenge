@@ -82,7 +82,10 @@ _FUENTES = {
 }
 
 #: Caracteres que se reemplazan cuando hay que caer a `cv2.putText`.
-_EQUIVALENTES = {"●": "*", "·": "-", "×": "x", "─": "-", "✓": "OK", "✗": "X", "⚠": "!"}
+# El grado no tiene descomposición Unicode a ASCII: sin equivalencia explícita
+# desaparece del texto, y "29.4" a secas no dice que sean grados.
+_EQUIVALENTES = {"●": "*", "·": "-", "×": "x", "─": "-", "✓": "OK", "✗": "X",
+                 "⚠": "!", "°": " deg"}
 
 
 def sin_acentos(texto: str) -> str:

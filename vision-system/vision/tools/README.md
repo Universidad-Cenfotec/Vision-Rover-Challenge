@@ -459,5 +459,12 @@ Planificado, sin código aún:
 
 - **Guía de alineamiento.** Ayudar a colocar la cámara en la posición correcta
   sobre la cancha, indicando en vivo qué corregir.
-- **Monitor en vivo.** Ver el estado del mundo sobre la imagen de la cámara en
-  tiempo real, para la puesta a punto antes de una ronda.
+> **El monitor en vivo ya existe**, y no está acá: es
+> [`vision/vista.py`](../vista.py), una ventana **del propio sistema**
+> (`python -m vision.sistema --ventana`).
+>
+> No es una herramienta de `tools/` a propósito. Un monitor separado tendría que
+> abrir la cámara —y una webcam solo se puede abrir una vez— o reimplementar la
+> detección, y en los dos casos mostraría **su** interpretación en vez de la del
+> sistema. Un monitor que puede discrepar de lo que se publica es peor que no
+> tener monitor.

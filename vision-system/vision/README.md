@@ -74,6 +74,7 @@ Dos módulos sueltos que no son de ningún lado, y siete subpaquetes:
 |---|---|
 | `sistema.py` | **El programa.** Encadena todo y se enciende. Elige la fuente, corre el bucle, falla abierto y arbitra las fases |
 | `mundo.py` | **La frontera.** El estado del mundo, inmutable: lo único que cruza de productores a consumidores. No es de ninguno de los dos lados, y por eso no vive dentro de ninguno |
+| `vista.py` | **La ventana.** Consumidor: dibuja sobre la imagen lo que el sistema está publicando. Solo lee, y si se apaga el sistema sigue igual |
 
 La columna de estado dice qué hay **hoy**, no qué va a haber; cada carpeta tiene
 su propio README con el detalle:
@@ -86,7 +87,7 @@ su propio README con el detalle:
 | `tracking/` | Productor | Identidad, oclusión y edad | 🟢 **memoria entre cuadros** |
 | `publish/` | Consumidor | Publicación TCP/NDJSON | 🟢 **reloj propio y último-valor-gana** (el transporte lo comparte con el contrato) |
 | `record/` | Consumidor | Grabación a disco | ⚪ vacío |
-| `tools/` | Herramientas | Puesta a punto y verificación | 🟢 **nueve herramientas** · ⚪ alineamiento y monitor en vivo |
+| `tools/` | Herramientas | Puesta a punto y verificación | 🟢 **nueve herramientas** · ⚪ guía de alineamiento |
 
 🟢 hay código funcionando · ⚪ planificado, sin código aún
 
@@ -112,11 +113,21 @@ Desde `vision-system/`, con el entorno virtual ya creado (ver el
 ```bash
 .venv/bin/python -m vision.sistema                # con la cámara real
 .venv/bin/python -m vision.sistema --sintetico    # sin cámara, con imágenes generadas
+.venv/bin/python -m vision.sistema --ventana      # además, la vista en vivo
 ```
 
 Sin argumentos abre la **cámara**. Lo sintético hay que pedirlo, y el sistema lo
 avisa en pantalla todo el tiempo. Mientras corre se le escribe `ready`, `start`,
 `stop` o `quit`.
+
+Con `--ventana` se abre la **vista en vivo**: la imagen con los marcadores, la
+grilla reproyectada, los rovers con su flecha y los cubos con su base, cada uno
+etiquetado con **la celda que se está publicando**. Desde la ventana se maneja
+con `r` / `s` / `f` / `q`.
+
+La vista se refresca a su propio reloj —12 Hz por defecto, `--ventana-hz` lo
+cambia— así que **no le cuesta nada al procesamiento**: medido, 179 cuadros en
+6 segundos con ventana y sin ventana.
 
 ### Las verificaciones y las herramientas
 
