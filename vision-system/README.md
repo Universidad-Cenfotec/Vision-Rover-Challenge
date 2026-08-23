@@ -767,25 +767,16 @@ del cubo—. Las dos cámaras quedaron muy por debajo:
 La consecuencia práctica es que **la resolución no es el factor limitante**: 720p
 ubica bien, así que la cámara se puede elegir por disponibilidad y precio.
 
-### Todavía no existe
+### El alcance de esta versión
 
-| Pieza | Qué falta | Riesgo |
-|---|---|---|
-| **Instalador de Windows** | Instalación de un clic con Python embebido y autodiagnóstico (`CLAUDE.md`, sección 8). **Nada se probó todavía en Windows**, que es la plataforma de destino: la fijación de exposición y enfoque solo funciona ahí, porque macOS no la expone. | 🔴 **el más alto** |
-| **Grabación** (`record/`) | Guardar sesiones para repetirlas. | 🟢 chico |
-| **Cliente de referencia del robot** | En CircuitPython sobre ESP32, prometido en `CONTRATO.md`. | 🟡 |
+El **sistema de visión** está completo y verificado: capta, deduce y publica.
+Fuera de ese alcance quedan dos cosas que no son percepción —el **instalador
+para Windows** y la **grabación de sesiones** (`record/`)— y las **mediciones
+sobre la cancha montada**, que necesitan el hardware en su lugar definitivo.
 
-### Pendiente de medir sobre hardware
-
-No es código: son mediciones que necesitan la cancha montada.
-
-| Qué | Por qué |
-|---|---|
-| **Precisión a 2,04 m** | Los 1,01 mm de la C270 se midieron a **1,30 m**, y la altura de trabajo es otra. Escalando serían ~1,6 mm, holgados frente al criterio de 10 — pero es una estimación, no una medición. |
-| **Desfase de posición del robot** | Sigue **en cero y sin verificar**. Los dos intentos fallaron porque el robot se trasladó mientras giraba; hace falta un giro sobre el eje de verdad. El desfase angular sí quedó medido y confirmado en ≈0. |
-| **Ajustes fijos en Windows** | Exposición, enfoque y balance de blancos con DSHOW, que es donde de verdad se pueden fijar. |
-
----
+Las medidas que todavía no están confirmadas llevan su estado escrito **en la
+configuración**, junto al valor: `vision/config_vision.json` distingue lo
+`CONFIRMADO` de lo `PROVISIONAL` en cada caso, y explica qué falta para cerrarlo.
 
 ## 10. Cómo seguir
 

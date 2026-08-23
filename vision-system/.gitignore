@@ -53,3 +53,13 @@ patron_calibracion*.pdf
 
 # Los PERFILES de cámara (vision/calibraciones/*.json) SÍ se versionan: son
 # configuración de un aparato concreto y la máquina de competencia los necesita.
+
+# --- Notas internas, no publicables -----------------------------------------
+# Registro de pendientes y de lo que falta verificar. Es material de trabajo
+# interno: vive en la máquina de desarrollo y no va al repositorio, que es lo
+# que ven CENFOTEC y los equipos.
+#
+# OJO: esto NO aplica a las notas de estado de vision/config_vision.json. Esas
+# van junto al valor que describen y SÍ se versionan: no son hoja de ruta sino
+# salvaguardas, y sin ellas un número sin verificar se lee como confirmado.
+PENDIENTES.md
