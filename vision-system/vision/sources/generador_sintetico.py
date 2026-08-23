@@ -585,6 +585,22 @@ class FuenteSintetica:
     diagnóstico alcanza, y evita rehacer el mismo dibujo decenas de veces por
     segundo. Lo que cambia en cada lectura es la marca de tiempo, que es lo que
     el consumidor usa para medir edad.
+
+    Entrega a una TASA, como una cámara
+    -----------------------------------
+    Antes entregaba tan rápido como se lo pidieran, y eso la volvía distinta de
+    la cámara justo en lo que más importa: **el ritmo al que late el sistema**.
+    Con un bucle que procesa rápido —o que falla rápido, que es peor— eso se
+    convierte en una espera activa que quema un núcleo entero.
+
+    Apareció midiendo el falla-abierto: con el procesamiento roto, el bucle daba
+    **1,3 millones de vueltas por segundo**. Con la cámara real no pasa, porque
+    entre cuadro y cuadro devuelve `None` y el bucle espera. Ahora la sintética
+    hace lo mismo: si el próximo cuadro todavía no toca, devuelve `None`.
+
+    Es la misma idea de siempre: **un solo sistema, y la fuente es lo único que
+    cambia**. Para que eso sea cierto, la fuente falsa tiene que comportarse como
+    la de verdad, incluido su ritmo.
     """
 
     def __init__(
@@ -592,23 +608,41 @@ class FuenteSintetica:
         cfg: ConfigVision,
         rovers: tuple[RoverDemo, ...] | None = None,
         perspectiva: Perspectiva | None = None,
+        fps: float | None = None,
     ):
         self.imagen, self.verdad = generar(cfg, rovers=rovers, perspectiva=perspectiva)
         self._indice = 0
         self._marcas: deque[float] = deque(maxlen=90)
+        # La misma tasa que se le pide a la cámara real: la fuente falsa imita a
+        # la de verdad también en el ritmo.
+        self._periodo = 1.0 / float(fps if fps is not None else cfg.camara.fps)
+        self._proximo = time.monotonic()
 
-    def leer(self) -> Cuadro:
+    def leer(self) -> Cuadro | None:
+        """Devuelve un cuadro, o `None` si el próximo todavía no toca.
+
+        Devolver `None` no es un error: es lo mismo que hace la cámara real
+        entre cuadro y cuadro, y es lo que le permite al bucle de proceso
+        esperar en vez de girar en vacío.
+        """
+        ahora = time.monotonic()
+        if ahora < self._proximo:
+            return None
+        # Se avanza al siguiente múltiplo del período en vez de sumar uno solo:
+        # si el consumidor estuvo ocupado y se perdió varios, no se le entrega
+        # una ráfaga para "ponerse al día". Un cuadro viejo no le sirve a nadie.
+        self._proximo = max(ahora, self._proximo + self._periodo)
         self._indice += 1
-        self._marcas.append(time.monotonic())
+        self._marcas.append(ahora)
         return Cuadro(imagen=self.imagen, ts_ms=ahora_ms(), indice=self._indice)
 
     @property
     def fps_real(self) -> float:
         """Cuadros por segundo que está entregando de hecho.
 
-        La fuente sintética no tiene una tasa propia: entrega tan rápido como se
-        lo pidan. Se mide igual para que el diagnóstico muestre lo mismo en las
-        dos fuentes en vez de un hueco.
+        Se mide en vez de devolver la tasa nominal, para que el diagnóstico
+        muestre lo mismo en las dos fuentes: lo que de hecho está saliendo, que
+        no siempre es lo que se pidió.
         """
         if len(self._marcas) < 2:
             return 0.0
