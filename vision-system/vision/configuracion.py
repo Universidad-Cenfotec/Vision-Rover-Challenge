@@ -158,6 +158,33 @@ class DesfaseMarcadorRobot:
 
 
 @dataclass(frozen=True, slots=True)
+class Deposito:
+    """Una zona de acopio: dónde está y de qué color."""
+
+    color: str
+    col: float
+    row: float
+
+
+@dataclass(frozen=True, slots=True)
+class Lugares:
+    """Los lugares fijos de la cancha: la salida y las tres zonas de acopio.
+
+    **Se declaran, no se detectan.** Están siempre, no se mueven y no envejecen,
+    así que buscarlos en cada cuadro sería trabajo perdido y una fuente de ruido
+    donde no hace falta. Por eso viajan en el mensaje en listas separadas de los
+    cubos, aunque compartan el color.
+
+    El contrato los exige en **cada** mensaje: sin ellos el sistema de visión
+    sabría dónde está cada objeto y no sabría adónde hay que llevarlo.
+    """
+
+    start_col: float
+    start_row: float
+    depositos: tuple[Deposito, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class DeteccionRovers:
     """Cómo se pasa de marcadores detectados a rovers.
 
@@ -445,6 +472,7 @@ class ConfigVision:
     tablero: Tablero
     marcadores_esquina: MarcadoresEsquina
     elementos: Elementos
+    lugares: Lugares
     deteccion_rovers: DeteccionRovers
     deteccion_cubos: DeteccionCubos
     medicion_desfases: MedicionDesfases
@@ -601,6 +629,16 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
 
     elementos = _leer_elementos(d["elementos"])
 
+    lu = d["lugares"]
+    lugares = Lugares(
+        start_col=float(lu["start"]["col"]),
+        start_row=float(lu["start"]["row"]),
+        depositos=tuple(
+            Deposito(color=str(x["color"]), col=float(x["col"]), row=float(x["row"]))
+            for x in lu["depots"]
+        ),
+    )
+
     dr = d["deteccion_rovers"]
     desf = dr["desfase_marcador_a_centro_mm"]
     deteccion_rovers = DeteccionRovers(
@@ -700,6 +738,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         tablero=tablero,
         marcadores_esquina=marcadores,
         elementos=elementos,
+        lugares=lugares,
         deteccion_rovers=deteccion_rovers,
         deteccion_cubos=deteccion_cubos,
         medicion_desfases=medicion_desfases,
@@ -780,6 +819,25 @@ def revisar_config(cfg: ConfigVision) -> str | None:
             "deteccion_rovers.desfase_angular_grados = {} está fuera de [-360, 360]; "
             "es un ángulo, no una cantidad de vueltas".format(dr.desfase_angular_grados)
         )
+    lug = cfg.lugares
+    colores_cubo = set(cfg.elementos.cubos.colores)
+    colores_deposito = [dep.color for dep in lug.depositos]
+    if sorted(colores_deposito) != sorted(colores_cubo):
+        return (
+            "lugares.depots tiene los colores {} y los cubos son {}: cada cubo tiene que "
+            "tener un depósito de SU color, y el contrato lo exige".format(
+                sorted(colores_deposito), sorted(colores_cubo))
+        )
+    if len(set(colores_deposito)) != len(colores_deposito):
+        return "lugares.depots: hay dos depósitos del mismo color"
+    puntos = [("start", lug.start_col, lug.start_row)]
+    puntos += [("depot " + dep.color, dep.col, dep.row) for dep in lug.depositos]
+    for nombre, col, row in puntos:
+        if not (0.0 <= col <= cfg.tablero.cols and 0.0 <= row <= cfg.tablero.rows):
+            return (
+                "lugares: {} está en ({}, {}), fuera de la cancha de {}x{} celdas".format(
+                    nombre, col, row, cfg.tablero.cols, cfg.tablero.rows)
+            )
     dc_cfg = cfg.deteccion_cubos
     faltan_matices = sorted(set(cfg.elementos.cubos.colores) - set(dc_cfg.matices_grados))
     if faltan_matices:
