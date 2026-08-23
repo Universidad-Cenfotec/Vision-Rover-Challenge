@@ -39,6 +39,7 @@ unidad o semántica es un cambio de contrato.
 | `schema.py` | **Uso interno del sistema de visión.** Fuente de verdad compartida entre el simulador y la visión real. Los equipos **no lo importan**: consumen el JSON crudo. |
 | `mock_publisher.py` | Simulador: publica telemetría sintética por TCP/NDJSON, con las patologías reales incluidas. |
 | `test_client.py` | Cliente de referencia: consume, valida y mide latencia y saltos de secuencia. |
+| `publicador.py` | **El transporte, compartido.** Abre el puerto, acepta clientes y aplica el último-valor-gana. Lo usan el simulador **y el sistema de visión real**: el contrato promete que un equipo pasa de uno al otro sin tocar su código, y eso incluye cómo se comporta la conexión, no solo la forma del mensaje. Con dos implementaciones podrían divergir sin que nadie lo note. |
 | `config_simulador.json` | Toda la configuración del simulador. Nada incrustado en el código. |
 
 ## Cómo se corre, en dos líneas

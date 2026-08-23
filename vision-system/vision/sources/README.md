@@ -71,15 +71,50 @@ imagen, verdad = generar(cfg)
 print(verdad.celda_a_pixel(21.5, 21.5))   # el centro de la cancha -> (640.0, 640.0)
 ```
 
-Incluye, configurable desde `config_vision.json`:
+#### Tiene una cámara de verdad, no un trapecio
 
-- **inclinación de cámara** opcional (apagada por defecto), porque la cámara real
-  nunca va a estar perfectamente cenital;
-- **desenfoque y ruido**, para ver cuánto aguanta la detección antes de fallar.
+El modo "con perspectiva" **no** deforma la imagen: hay una **cámara
+estenopeica** con posición, objetivo e intrínsecos, y todo se proyecta con
+`projectPoints`. La inclinación es el ángulo **físico** entre el eje óptico y la
+vertical, el que se mediría con un transportador sobre el soporte.
 
-Expone también `FuenteSintetica`, que cumple la misma interfaz que la cámara: se
-puede correr el sistema entero sin cámara y seguir teniendo la verdad para
-verificar lo que deduce.
+Importa porque sin rayos no se pueden simular las dos cosas que el sistema tiene
+que resolver de verdad:
+
+- el **paralaje**: un objeto con altura se ve corrido porque su rayo cruza el
+  plano del tablero en otro lado. Los marcadores de rover se dibujan a sus
+  **90 mm** reales y los cubos como **cajas 3D**;
+- la **oclusión**: un objeto tapa a otro cuando se le pone en el rayo. Sale del
+  algoritmo del pintor —se dibuja de lejos a cerca— sin programarla.
+
+Eso es lo que permite verificar el caso más frecuente del juego: un rover
+empujando un cubo hacia una esquina le esconde el **22 %** del área, y justo la
+arista de la base.
+
+> El mundo se define con `Y = −row`. Sin ese menos, una cámara real mirando hacia
+> abajo produce la imagen **espejada**, y un ArUco espejado no lo detecta nadie
+> porque no coincide con ninguna entrada del diccionario.
+
+La imagen sale en **BGR**, como la que entrega la cámara real.
+
+Incluye además, configurable desde `config_vision.json`: **altura e inclinación**
+de la cámara simulada, y **desenfoque y ruido** para ver cuánto aguanta la
+detección antes de fallar.
+
+#### `FuenteSintetica` entrega a una tasa, como la cámara
+
+Cumple la misma interfaz que la cámara, así que el sistema entero corre sin
+cámara y sigue teniendo la verdad para verificar lo que deduce.
+
+Y entrega **a la misma tasa** que se le pide a la cámara real: si el próximo
+cuadro todavía no toca, devuelve `None`. Antes entregaba tan rápido como se lo
+pidieran, y eso la volvía distinta de la cámara justo en lo que más importa —el
+ritmo al que late el sistema—. Apareció midiendo el falla-abierto: con el
+procesamiento roto, el bucle daba **1,3 millones de vueltas por segundo**.
+
+Cuando se atrasa **no entrega una ráfaga** para ponerse al día. Un cuadro viejo
+no le sirve a nadie: es la misma lógica del último-valor-gana, aplicada del lado
+de la entrada.
 
 > **Ojo, no confundir con el simulador de `contrato/`.** Aquel emite *posiciones
 > en JSON* por la red, para que los equipos prueben su rover. Este dibuja

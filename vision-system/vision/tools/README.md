@@ -61,6 +61,55 @@ El escenario del salto angular imprime, al lado, la **resta ingenua** y la
 diferencia bien calculada, para que se vea el problema en vez de tener que
 creerlo.
 
+### `verificar_cubos.py`
+
+Verifica la **detección de cubos**: que los encuentre por color, que los ubique
+por su **base** —que es lo que el contrato publica— y que aguante que un rover
+los tape.
+
+```bash
+python -m vision.tools.verificar_cubos
+python -m vision.tools.verificar_cubos --salida /tmp/cubos.png --anotar
+```
+
+Cinco escenarios en los dos modos de cámara: los tres cubos de la configuración,
+cubos repartidos por la cancha, tres rotaciones distintas, un rover **empujando**
+el cubo, y un rover tapándolo aún más.
+
+Cada fila reporta el ajuste **al lado del centroide ingenuo** —el método que se
+descartó— para que la diferencia se vea en vez de haber que creerla. Con la
+cámara inclinada: **1,05 mm** contra 9,84 con el cubo despejado, y **4,88 mm**
+contra 17,01 con un rover empujándolo.
+
+> **El último escenario cambia de pregunta.** Con el 70 % del cubo tapado el
+> ajuste llega a errar más que el centroide: cuando se le acaba la evidencia, el
+> método se degrada. Ahí no se le exige **acertar** sino **no mentir**, y lo que
+> se comprueba es que la detección se marque como no confiable.
+
+### `verificar_seguimiento.py`
+
+Verifica que el seguimiento cumpla **la promesa del contrato sobre oclusión**:
+que un objeto tapado no desaparezca de su lista.
+
+```bash
+python -m vision.tools.verificar_seguimiento
+```
+
+La sección 8 de [`CONTRATO.md`](../../contrato/CONTRATO.md) hace cuatro
+afirmaciones comprobables, y cada escenario las comprueba todas: mientras el
+objeto está tapado **sigue en la lista**, su **posición no se mueve**, su **edad
+crece** y coincide con el tiempo transcurrido, y al reaparecer **vuelve a cero**.
+
+| Escenario | Qué pone a prueba |
+|---|---|
+| El cubo verde deja de verse | la oclusión total |
+| Al rover 11 se le tapa el marcador | que los rovers reciben el mismo trato |
+| Un rover tapa el cubo hasta volverlo no confiable | que una detección dudosa **no** refresca |
+
+Se prueba con **cuadros generados y procesados de punta a punta**, no con
+detecciones escritas a mano: así se ejercitan detección, confiabilidad y memoria
+juntas, en vez de comprobar solo que un diccionario recuerda cosas.
+
 ### `medir_desfases.py`
 
 Mide los **dos desfases entre el marcador y el robot** usando el propio sistema

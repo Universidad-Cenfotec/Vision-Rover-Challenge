@@ -27,9 +27,13 @@ entenderlo.
 
 ## 1. Qué es esto y para qué sirve
 
-En el reto, **dos rovers** tienen que encontrar unos **cubos de colores**,
-esquivar **obstáculos** y llevar cada cubo hasta su **zona de acopio**. Los
-rovers son ciegos: no tienen cámara propia ni saben dónde están.
+En el reto, **dos rovers** tienen que encontrar unos **cubos de colores** y
+llevar cada uno hasta su **zona de acopio**. Los rovers son ciegos: no tienen
+cámara propia ni saben dónde están.
+
+> En **esta primera edición no hay obstáculos**. El campo `obstacles` del
+> contrato sigue existiendo y llega como lista vacía: no es un cambio de formato
+> y ningún equipo tiene que tocar nada.
 
 Lo que los guía es una **cámara cenital** montada sobre la cancha. Esa cámara y
 el software que la procesa son este proyecto.
@@ -37,8 +41,8 @@ el software que la procesa son este proyecto.
 El sistema hace tres cosas:
 
 1. **Mira** la cancha (~1 m × 1 m) desde arriba.
-2. **Deduce** dónde está cada rover, cada cubo y cada obstáculo, y hacia dónde
-   apunta cada rover.
+2. **Deduce** dónde está cada rover y cada cubo, y hacia dónde apunta cada
+   rover.
 3. **Publica** esa información por la red, varias veces por segundo, en un
    formato fijo que los equipos consumen.
 
@@ -92,7 +96,6 @@ rover que decide girar:
   │  4 marcadores│
   │  2 rovers    │
   │  3 cubos     │
-  │  obstáculos  │
   └──────┬───────┘
          │ luz
          ▼
@@ -117,11 +120,13 @@ rover que decide girar:
            ▼
   ┌─────────────────┐   ③  Encuentra los 4 marcadores ArUco de esquina y con
   │   geometry/     │      ellos arma el sistema de coordenadas, que convierte
-  │   píxeles→celdas│      cualquier píxel en su celda.
-  └────────┬────────┘
+  │   píxeles→celdas│      cualquier píxel en su celda. De los mismos cuatro
+  └────────┬────────┘      deduce la POSE DE LA CÁMARA, que hace falta para
+           │               corregir el paralaje de los objetos con altura.
            ▼
-  ┌─────────────────┐   ④  Busca los rovers por su marcador ArUco, y los cubos
-  │   detectors/    │      y obstáculos por color. Solo DETECTA: no interpreta.
+           ▼
+  ┌─────────────────┐   ④  Busca los rovers por su marcador ArUco y los cubos
+  │   detectors/    │      por color. Solo DETECTA: no interpreta.
   │   qué hay dónde │
   └────────┬────────┘
            ▼
@@ -163,20 +168,30 @@ rover que decide girar:
 
 ### Qué de todo esto ya funciona
 
-El diagrama muestra el recorrido **completo**, que es a dónde va el sistema. Hoy
-está construido hasta la mitad:
+El diagrama muestra el recorrido completo, y **está construido entero**:
 
-| Paso | Estado |
-|---|---|
-| ① captura · ② rectificación · ③ píxeles→celdas | ✅ **escritos y verificados** |
-| ④ detectores — **rovers** | ✅ **escrito y verificado** |
-| ④ detectores — cubos y obstáculos por color | ⚪ todavía no existe |
-| ⑤ seguimiento · ⑥ estado del mundo · ⑦ consumidores | ⚪ todavía no existen |
+| Paso | Estado | Error medido |
+|---|---|---|
+| ① captura · ② rectificación | ✅ | — |
+| ③ píxeles→celdas | ✅ | 0,52 mm |
+| ③b pose de cámara · ③c paralaje | ✅ | 41 mm → **0,9 mm** |
+| ④ detectores — **rovers** | ✅ | 1,03 mm · 1,2° |
+| ④ detectores — **cubos** | ✅ | 1,05 mm (4,88 mm empujado) |
+| ⑤ seguimiento · ⑥ estado del mundo · ⑦ publicación | ✅ | — |
+| ⑦ grabación a disco | ⚪ todavía no existe | — |
 
-Las etapas ya hechas existen como **piezas sueltas y probadas**, pero
-**todavía no hay un programa que las encadene**: se ejercitan desde las
-herramientas de `vision/tools/`, no desde un bucle de producción. El detalle
-pieza por pieza está en la [sección 9](#9-estado-actual-del-proyecto).
+Todos los errores son **contra la verdad conocida** del generador sintético, con
+la cámara inclinada, y contra un criterio de aceptación de **10 mm**.
+
+Y ya **hay un programa que las encadena**:
+
+```bash
+python -m vision.sistema                # con la cámara real
+python -m vision.sistema --sintetico    # sin cámara, con imágenes generadas
+```
+
+El detalle pieza por pieza está en la
+[sección 9](#9-estado-actual-del-proyecto).
 
 ### Dos relojes que no se esperan
 
@@ -282,11 +297,19 @@ Vision-Rover-Challenge/              # raíz del repositorio (fork de CENFOTEC)
         │   ├── distorsion.py        #   corrección del lente + perfiles de cámara
         │   └── coordenadas.py       #   sistema de coordenadas por marcadores
         │
-        ├── detectors/               # productor: qué hay y dónde
-        │   └── rovers.py            #   rovers por su marcador: celda y ángulo
+        ├── sistema.py               # ◄── EL PROGRAMA: encadena todo y se enciende
+        ├── mundo.py                 # la frontera: el estado del mundo, inmutable
         │
-        ├── tracking/                # productor: identidad y oclusión   (vacío)
-        ├── publish/                 # consumidor: a la red              (vacío)
+        ├── detectors/               # productor: qué hay y dónde
+        │   ├── rovers.py            #   rovers por su marcador: celda y ángulo
+        │   └── cubos.py             #   cubos por color: base, ajustando el modelo
+        │
+        ├── tracking/                # productor: identidad, oclusión y edad
+        │   └── seguimiento.py       #   memoria entre cuadros
+        │
+        ├── publish/                 # consumidor: a la red
+        │   └── telemetria.py        #   reloj propio, último estado bueno
+        │
         ├── record/                  # consumidor: a disco               (vacío)
         │
         ├── tools/                   # herramientas de puesta a punto
@@ -294,8 +317,11 @@ Vision-Rover-Challenge/              # raíz del repositorio (fork de CENFOTEC)
         │   ├── patron_calibracion.py    # genera los PDF para imprimir
         │   ├── calibrar_camara.py       # mide la distorsión del lente
         │   ├── precision_ubicacion.py   # ¿ubica con error aceptable?
+        │   ├── medir_desfases.py        # los desfases marcador ↔ robot
         │   ├── verificar_geometria.py   # coordenadas contra verdad conocida
         │   ├── verificar_rovers.py      # rovers contra verdad conocida
+        │   ├── verificar_cubos.py       # cubos contra verdad conocida
+        │   ├── verificar_seguimiento.py # oclusión y edad
         │   └── panel.py                 # el panel que dibujan las demás
         │
         ├── calibraciones/           # DATOS: un perfil por cámara calibrada
@@ -551,6 +577,31 @@ El manual completo para los equipos está en
 
 ## 8. Cómo correr y probar lo que ya existe
 
+### Encender el sistema completo
+
+Esto es lo que hace todo: mira, deduce y publica.
+
+```bash
+.venv/bin/python -m vision.sistema                # con la cámara real
+.venv/bin/python -m vision.sistema --sintetico    # sin cámara, con imágenes generadas
+```
+
+Mientras corre, se le escribe por teclado: `ready`, `start`, `stop`, `quit`. La
+visión es árbitro y esos comandos son su voz.
+
+> **Sin argumentos abre la cámara.** Lo sintético hay que **pedirlo**, y cuando
+> corre así el sistema lo repite en pantalla en un cartel imposible de pasar por
+> alto. Nadie tiene que poder confundir una demostración con una ronda.
+
+Para ver lo que sale, en otra terminal:
+
+```bash
+python3 contrato/test_client.py
+```
+
+Es el mismo cliente de referencia que usan los equipos, sin modificar: se conecta
+al puerto 2026 y valida cada mensaje contra el contrato.
+
 ### Preparar el entorno (una sola vez)
 
 El sistema de visión necesita **Python 3.10 o superior**. Parado en
@@ -599,6 +650,24 @@ Para ver la imagen que generó:
 .venv/bin/python -m vision.tools.verificar_geometria --salida /tmp/tablero.png --anotar
 ```
 
+### Las cuatro verificaciones contra verdad conocida
+
+Cada etapa tiene la suya. Todas corren **sin cámara** y devuelven código de
+salida distinto de cero si algo se sale de umbral, así que sirven igual para
+mirarlas a mano o para encadenarlas.
+
+```bash
+.venv/bin/python -m vision.tools.verificar_geometria      # píxeles → celdas
+.venv/bin/python -m vision.tools.verificar_rovers         # posición y ángulo
+.venv/bin/python -m vision.tools.verificar_cubos          # color, base y oclusión
+.venv/bin/python -m vision.tools.verificar_seguimiento    # memoria, oclusión y edad
+.venv/bin/python -m vision.tools.medir_desfases --autoprueba
+```
+
+Ese último no es una verificación del sistema sino de **la matemática de la
+herramienta de desfases**: le inyecta un desfase conocido al generador y
+comprueba que lo recupera, antes de dejarla acercarse al robot real.
+
 ### Poner a punto una cámara real
 
 Cuatro etapas —diagnóstico, impresión del patrón, calibración de distorsión y
@@ -637,7 +706,12 @@ va engrosando. Así siempre hay algo que funciona y se puede verificar.
 | **Calibración de distorsión** (`vision/geometry/`) | Corrige la curvatura del lente gran angular. **Dos cámaras ya calibradas y verificadas**: ArgomTech CAM40 (1920×1080, 0,314 px) y Logitech C270 (1280×720, 0,206 px). |
 | **Perfiles por cámara** (`vision/geometry/`) | Cada aparato guarda su propia calibración, y el sistema **avisa cuando el perfil no le corresponde** a la cámara conectada, en vez de corregir mal en silencio. |
 | **Detección de rovers** (`vision/detectors/`) | Encuentra los rovers por su marcador y deduce su **celda y su ángulo**, calculados en celdas y no en píxeles porque la perspectiva no conserva los ángulos. Verificado contra la verdad del generador: **0,8 mm** de error de posición y **1,3°** de orientación con la cámara inclinada, sobre 36 rovers repartidos. |
-| **Herramientas de puesta a punto** (`vision/tools/`) | Siete: diagnóstico de cámara, generación de los PDF para imprimir, calibración, verificación visual, verificación de geometría, verificación de rovers y medición de precisión. |
+| **Detección de cubos** (`vision/detectors/`) | Encuentra los cubos por color —croma en Lab para separar, matiz para clasificar— y los ubica por su **base**, ajustando el modelo del cubo al contorno visible. **1,05 mm** con el cubo despejado y **4,88 mm** con un rover empujándolo y tapándole el 22 %. |
+| **Pose de cámara y paralaje** (`vision/geometry/`) | La pose sale de los mismos cuatro marcadores, sin declarar nada. Con ella, el corrimiento del marcador del rover baja de **41 mm a 0,9 mm**. |
+| **Seguimiento** (`vision/tracking/`) | Memoria entre cuadros: un objeto tapado conserva su posición y su edad crece, en vez de desaparecer. Acá **no hay problema de asociación**, porque cada objeto trae su identidad. |
+| **Publicación** (`vision/publish/`) | TCP/NDJSON en el 2026, con reloj propio y último-valor-gana. El transporte lo comparte con el simulador. |
+| **El sistema completo** (`vision/sistema.py`) | El programa que se enciende: elige la fuente, corre el bucle, falla abierto y arbitra las fases. |
+| **Herramientas de puesta a punto** (`vision/tools/`) | Nueve: diagnóstico de cámara, generación de los PDF, calibración, medición de precisión, medición de desfases, y cuatro verificaciones contra verdad conocida —geometría, rovers, cubos y seguimiento—. |
 
 **Precisión medida sobre hardware real.** El criterio era **error máximo por
 debajo de 10 mm** —un cubo mide 60 mm, así que 10 mm mantiene el objetivo dentro
@@ -653,14 +727,21 @@ ubica bien, así que la cámara se puede elegir por disponibilidad y precio.
 
 ### Todavía no existe
 
-| Pieza | Qué falta |
+| Pieza | Qué falta | Riesgo |
+|---|---|---|
+| **Instalador de Windows** | Instalación de un clic con Python embebido y autodiagnóstico (`CLAUDE.md`, sección 8). **Nada se probó todavía en Windows**, que es la plataforma de destino: la fijación de exposición y enfoque solo funciona ahí, porque macOS no la expone. | 🔴 **el más alto** |
+| **Grabación** (`record/`) | Guardar sesiones para repetirlas. | 🟢 chico |
+| **Cliente de referencia del robot** | En CircuitPython sobre ESP32, prometido en `CONTRATO.md`. | 🟡 |
+
+### Pendiente de medir sobre hardware
+
+No es código: son mediciones que necesitan la cancha montada.
+
+| Qué | Por qué |
 |---|---|
-| **Corrección de paralaje** (`geometry/`) | Los objetos altos se ven corridos hacia afuera; hay que compensarlo con la altura conocida. Ya se sabe **cuánto pesa** —la herramienta de precisión lo mide y lo descuenta—, pero todavía no es una etapa del flujo. |
-| **Desfases marcador ↔ robot** (`detectors/`) | La estructura está y verificada, pero los dos desfases están **en cero**: el marcador está corrido del centro de giro del robot real y el frente son las paletas. Se miden con el propio sistema haciendo girar el robot en el lugar. |
-| **Detección de color** (`detectors/`) | Cubos y obstáculos por color, segmentando por saturación. |
-| **Seguimiento** (`tracking/`) | Identidad entre cuadros, oclusión y edad. |
-| **Publicación** (`publish/`) | Emitir el estado del mundo por TCP. Hoy solo lo hace el simulador. |
-| **Grabación** (`record/`) | Guardar sesiones para repetirlas. |
+| **Precisión a 2,04 m** | Los 1,01 mm de la C270 se midieron a **1,30 m**, y la altura de trabajo es otra. Escalando serían ~1,6 mm, holgados frente al criterio de 10 — pero es una estimación, no una medición. |
+| **Desfase de posición del robot** | Sigue **en cero y sin verificar**. Los dos intentos fallaron porque el robot se trasladó mientras giraba; hace falta un giro sobre el eje de verdad. El desfase angular sí quedó medido y confirmado en ≈0. |
+| **Ajustes fijos en Windows** | Exposición, enfoque y balance de blancos con DSHOW, que es donde de verdad se pueden fijar. |
 
 ---
 

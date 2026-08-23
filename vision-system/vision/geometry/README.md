@@ -139,12 +139,50 @@ que ya existe** por otro motivo; si no, queda como dato informativo.
 
 Para generar un perfil, ver [`../tools/README.md`](../tools/README.md).
 
+### `coordenadas.py` — la pose de cámara y el paralaje
+
+Los objetos **altos** no se ven donde están: se ven corridos **hacia afuera**,
+alejándose del punto que está justo debajo de la cámara. El marcador del rover
+está a 90 mm del tablero, y eso son hasta **41 mm** de error con la cámara
+inclinada, contra un criterio de aceptación de 10.
+
+Los cuatro marcadores de esquina **no pueden corregirlo por sí solos**: están al
+ras del tablero, así que no contienen ninguna información sobre cuánto se
+desplaza algo que tiene altura. Hace falta la **pose de la cámara**.
+
+**Y no hay que declararla.** Los cuatro centros son puntos coplanares de posición
+métrica conocida y la cámara está calibrada, así que `solvePnP` da la pose
+completa. Nadie mide 2,1 m con una cinta: sale de los mismos marcadores que el
+sistema ya tiene que ver, y si alguien mueve la cámara, el cuadro siguiente trae
+una pose nueva.
+
+> Los intrínsecos que se usan son los de la imagen **ya rectificada**
+> (`Rectificador.matriz_nueva`) y no los del perfil: quitar la distorsión cambia
+> los intrínsecos efectivos, y usar los de antes metería un error que después
+> nadie sabría de dónde salió.
+
+La corrección es una **homotecia centrada en el nadir** con factor `(H−h)/H`, y
+es exacta para cualquier inclinación de cámara porque el rayo solo depende del
+centro óptico y no de hacia dónde mire.
+
+| Inclinación | Sin corregir | Corregido |
+|---|---|---|
+| 0° | 19,44 mm | **0,43 mm** |
+| 8° | 30,07 mm | **1,03 mm** |
+| 15° | 41,29 mm | **0,89 mm** |
+
+Medido sobre 36 rovers repartidos por toda la cancha. Entre 30 y 45 veces mejor.
+
+Dos propiedades que conviene saber:
+
+- **El ángulo no se toca.** Una homotecia conserva las direcciones, así que la
+  orientación del rover ya era correcta antes de corregir nada.
+- **Es muy insensible al error de la pose.** Como solo escala por `(1−1/k)`, un
+  4,3 %, trece milímetros de error en el nadir se traducen en 0,6 mm de posición.
+
+Los **cubos no la necesitan**: se ubican por su borde inferior, que está en el
+piso, y ahí el factor vale exactamente 1.
+
 ## Lo que todavía NO existe
 
 Planificado, sin código aún:
-
-- **Corrección de paralaje.** Los objetos **altos** —un cubo de 6 cm, el marcador
-  de un rover a unos 10 cm— no se ven donde están: se ven corridos **hacia
-  afuera**, alejándose del centro de la cámara, porque la cámara los mira de
-  costado. Se corrige con la **pose de cámara** deducida de los cuatro marcadores
-  más la **altura conocida** de cada objeto.
