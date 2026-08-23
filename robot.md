@@ -1,4 +1,18 @@
 <img src="https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/Cenfobot_Rover.jpeg" alt="Robot del proyecto" width="900">
+
+## Que se les entrega
+
+> Ver video que muestra lo que se entrega grátis
+
+- 2 kits de CenfoBot
+- 3 cubos (rojo, azul y verde)
+- Webcam
+- Superficie cuadriculada de 1m x 1m
+
+## Componetes del kit de CenfoBot
+
+> En este video puede ver lo que contiene el kit de CenfoBot
+
 ## Especificaciones de los robots
 
 Cada equipo participante recibirá **dos robots tipo rover**, construidos a partir de una versión modificada de la plataforma educativa Sumobot. Ambos robots deberán trabajar de manera coordinada para localizar, recolectar y transportar objetos cúbicos dentro del espacio de competencia.
