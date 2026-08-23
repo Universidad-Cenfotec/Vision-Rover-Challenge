@@ -48,7 +48,7 @@ try:  # como paquete
     from .detectors.cubos import detectar_cubos
     from .detectors.rovers import detectar_rovers
     from .geometry.coordenadas import (
-        ErrorGeometria, construir_sistema, detectar_marcadores, pose_camara,
+        AnclajeCancha, ErrorGeometria, detectar_marcadores, pose_camara,
     )
     from .geometry.distorsion import (
         ErrorCalibracion, FuenteRectificada, Rectificador, comparar_con_camara, elegir_perfil,
@@ -65,7 +65,7 @@ except ImportError:  # como script suelto
     from vision.detectors.cubos import detectar_cubos  # type: ignore[no-redef]
     from vision.detectors.rovers import detectar_rovers  # type: ignore[no-redef]
     from vision.geometry.coordenadas import (  # type: ignore[no-redef]
-        ErrorGeometria, construir_sistema, detectar_marcadores, pose_camara,
+        AnclajeCancha, ErrorGeometria, detectar_marcadores, pose_camara,
     )
     from vision.geometry.distorsion import (  # type: ignore[no-redef]
         ErrorCalibracion, FuenteRectificada, Rectificador, comparar_con_camara, elegir_perfil,
@@ -145,7 +145,7 @@ def abrir_fuente(cfg: ConfigVision, args):
     return fuente, "cámara {} ({}x{})".format(perfil.camara, ancho, alto)
 
 
-def procesar(cuadro, cfg, matriz_camara, fase, seguidor):
+def procesar(cuadro, cfg, matriz_camara, fase, seguidor, anclaje):
     """De un cuadro al estado del mundo. Lanza si la geometría no se puede armar.
 
     Una sola pasada del detector de ArUco por cuadro: el mismo resultado sirve
@@ -160,7 +160,10 @@ def procesar(cuadro, cfg, matriz_camara, fase, seguidor):
     observación, y la edad de todos los objetos tiene que seguir creciendo.
     """
     detectados = detectar_marcadores(cuadro.imagen, cfg.marcadores_esquina.nombre_diccionario)
-    sistema = construir_sistema(cuadro.imagen, cfg, detectados)
+    # El anclaje aguanta que falte UN marcador: conserva la homografía buena y usa
+    # los tres visibles para comprobar que la cámara no se movió. Con dos o menos,
+    # o si los tres la desmienten, lanza y el falla-abierto se hace cargo.
+    sistema = anclaje.actualizar(cuadro.imagen, detectados)
     pose = pose_camara(sistema, matriz_camara)
     return seguidor.actualizar(
         ts_ms=cuadro.ts_ms,
@@ -211,6 +214,7 @@ def main(argv: list[str] | None = None) -> int:
 
     arbitro = Arbitro(args.fase)
     seguidor = Seguidor(cfg)
+    anclaje = AnclajeCancha(cfg)
     publicador = PublicadorTelemetria(cfg, avisar=lambda t: print(t, flush=True))
     salir = threading.Event()
 
@@ -250,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
             # sigue. La publicación continúa emitiendo el último estado bueno,
             # que envejece a la vista de todos. El sistema no se calla nunca.
             try:
-                publicador.actualizar(procesar(cuadro, cfg, matriz, arbitro.fase, seguidor))
+                publicador.actualizar(procesar(cuadro, cfg, matriz, arbitro.fase, seguidor, anclaje))
             except ErrorGeometria as exc:
                 fallos += 1
                 ultimo_error = str(exc).split(".")[0]
@@ -268,6 +272,12 @@ def main(argv: list[str] | None = None) -> int:
                           "{} ms".format(edad) if edad is not None else "sin estado",
                           seguidor.conservados_rover, seguidor.conservados_cubo),
                       flush=True)
+                if anclaje.conservando:
+                    print("[aviso] falta un marcador de esquina: se ven {}, y se viene "
+                          "conservando la geometría hace {} cuadros (desvío {:.2f} mm). "
+                          "Las coordenadas siguen siendo válidas.".format(
+                              anclaje.esquinas_visibles, anclaje.cuadros_conservados,
+                              anclaje.desvio_mm), flush=True)
                 if ultimo_error:
                     print("[aviso] último problema: {}".format(ultimo_error), flush=True)
                     ultimo_error = ""

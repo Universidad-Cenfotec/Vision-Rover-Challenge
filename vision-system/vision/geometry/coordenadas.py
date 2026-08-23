@@ -164,6 +164,120 @@ def centro_de(esquinas: np.ndarray) -> tuple[float, float]:
     return (float(centro[0]), float(centro[1]))
 
 
+class AnclajeCancha:
+    """Mantiene el sistema de coordenadas cuadro a cuadro, aguantando un marcador menos.
+
+    Por qué hace falta
+    ------------------
+    `construir_sistema` exige los cuatro marcadores, y con razón: una homografía
+    tiene **ocho grados de libertad** y cada punto aporta dos ecuaciones, así que
+    cuatro puntos la determinan justo. Con tres solo alcanza para una
+    transformación **afín**, y lo que falta son exactamente los términos de
+    perspectiva. Medido contra la verdad del generador, con la cámara a 8°: la
+    afín erra **36 mm** donde la homografía erra 0,52.
+
+    Pero reajustar no es la única opción, y no es la mejor.
+
+    La cámara está atornillada
+    --------------------------
+    Los marcadores están pegados al tablero y la cámara no se mueve durante una
+    ronda: **la homografía es prácticamente constante**. Recalcularla en cada
+    cuadro no es una necesidad sino una función de robustez, para reanclarse solo
+    si alguien la golpea.
+
+    Entonces, con tres visibles, lo correcto es **conservar la última buena**. La
+    precisión no se degrada nada, porque es literalmente la misma homografía.
+
+    Y los tres que quedan sirven para vigilar
+    -----------------------------------------
+    Conservar una homografía vieja sería un desastre silencioso si la cámara se
+    movió. Pero tres marcadores alcanzan de sobra para **detectarlo**: se los
+    reproyecta con la homografía guardada y se mira si caen donde deben.
+
+    La comprobación es **conservadora por construcción**: siempre acusa más de lo
+    que el error realmente vale. Medido, con la cámara movida 0,25°, los tres
+    acusan 1,58 mm mientras el error real de posición es 0,92. Por eso el umbral
+    en milímetros de desvío se traduce en un error real menor.
+
+    No hay límite de tiempo para seguir así, y es a propósito: lo que autoriza a
+    conservar la homografía no es que haya pasado poco tiempo, sino que los tres
+    marcadores visibles **siguen confirmándola en cada cuadro**. La salvaguarda
+    es la verificación, no un cronómetro.
+    """
+
+    def __init__(self, cfg: ConfigVision):
+        self._cfg = cfg
+        self._sistema: SistemaCoordenadas | None = None
+        #: Cuántos cuadros seguidos se viene conservando la homografía.
+        self.cuadros_conservados = 0
+        #: Cuántas esquinas se vieron en el último cuadro.
+        self.esquinas_visibles = 0
+        #: Cuánto se desviaron las visibles de donde deberían estar, en mm.
+        self.desvio_mm = 0.0
+
+    def actualizar(self, imagen: np.ndarray, detectados: dict[int, np.ndarray]) -> SistemaCoordenadas:
+        """Devuelve el sistema de coordenadas de este cuadro.
+
+        Lanza `ErrorGeometria` cuando no se puede sostener: con dos marcadores o
+        menos, o cuando los tres visibles delatan que la cámara se movió.
+        """
+        esperados = self._cfg.marcadores_esquina.ids_esperados
+        visibles = sorted(esperados & set(detectados))
+        self.esquinas_visibles = len(visibles)
+
+        if len(visibles) == 4:
+            self._sistema = construir_sistema(imagen, self._cfg, detectados)
+            self.cuadros_conservados = 0
+            self.desvio_mm = 0.0
+            return self._sistema
+
+        if self._sistema is None:
+            raise ErrorGeometria(
+                "hacen falta los cuatro marcadores de esquina para arrancar; se ven {}. "
+                "Todavía no hay un sistema de coordenadas anterior que conservar.".format(visibles)
+            )
+        if len(visibles) < 3:
+            raise ErrorGeometria(
+                "solo se ven {} marcadores de esquina. Con menos de tres no se puede "
+                "comprobar que la cámara no se haya movido, así que la homografía "
+                "guardada deja de ser confiable.".format(len(visibles))
+            )
+
+        # Tres visibles: se conserva la homografía y se la somete a los tres.
+        self.desvio_mm = self._desvio(detectados, visibles)
+        if self.desvio_mm > self._cfg.marcadores_esquina.desvio_maximo_mm:
+            self.cuadros_conservados = 0
+            raise ErrorGeometria(
+                "se ven 3 marcadores de esquina y NO confirman la geometría guardada: "
+                "se desvían {:.2f} mm, más del máximo de {:.2f}. La cámara se movió, "
+                "así que las coordenadas viejas ya no valen.".format(
+                    self.desvio_mm, self._cfg.marcadores_esquina.desvio_maximo_mm)
+            )
+        self.cuadros_conservados += 1
+        return self._sistema
+
+    def _desvio(self, detectados: dict[int, np.ndarray], visibles: list[int]) -> float:
+        """Cuánto se apartan los marcadores visibles de donde deberían caer.
+
+        Se los pasa por la homografía guardada y se compara contra la celda que
+        declara la configuración. Si la cámara no se movió, el desvío es el
+        ruido de detección; si se movió, se dispara.
+        """
+        assert self._sistema is not None
+        observados = np.array([centro_de(detectados[i]) for i in visibles], dtype=np.float64)
+        recuperados = self._sistema.a_celdas(observados)
+        declarados = np.array(
+            [self._cfg.marcadores_esquina.disposicion[i] for i in visibles], dtype=np.float64
+        )
+        distancias = np.linalg.norm(recuperados - declarados, axis=1)
+        return float(distancias.max()) * self._cfg.tablero.cell_mm
+
+    @property
+    def conservando(self) -> bool:
+        """Si el cuadro actual está usando una homografía guardada."""
+        return self.cuadros_conservados > 0
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class PoseCamara:
     """Dónde está la cámara respecto de la cancha, deducido de los marcadores.

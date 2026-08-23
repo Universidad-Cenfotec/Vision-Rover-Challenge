@@ -66,6 +66,7 @@ class MarcadoresEsquina:
     disposicion: dict[int, tuple[float, float]]
     lado_mm: float
     borde_blanco_mm: float
+    desvio_maximo_mm: float
 
     @property
     def ids_esperados(self) -> frozenset[int]:
@@ -661,6 +662,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         disposicion=_leer_disposicion(m["disposicion"], tablero.cols, tablero.rows),
         lado_mm=float(m["lado_mm"]),
         borde_blanco_mm=float(m["borde_blanco_mm"]),
+        desvio_maximo_mm=float(m["desvio_maximo_mm"]),
     )
 
     elementos = _leer_elementos(d["elementos"])
@@ -822,6 +824,11 @@ def revisar_config(cfg: ConfigVision) -> str | None:
         return "hay dos marcadores de esquina asignados a la misma esquina"
     if cfg.marcadores_esquina.lado_mm <= 0:
         return "marcadores_esquina.lado_mm debe ser > 0 (es el tamaño del marcador impreso)"
+    if cfg.marcadores_esquina.desvio_maximo_mm <= 0:
+        return (
+            "marcadores_esquina.desvio_maximo_mm debe ser > 0: es el umbral que decide "
+            "si la geometría guardada sigue valiendo cuando falta un marcador"
+        )
     if cfg.marcadores_esquina.borde_blanco_mm <= 0:
         return (
             "marcadores_esquina.borde_blanco_mm debe ser > 0: sin zona blanca alrededor "
