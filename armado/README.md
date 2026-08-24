@@ -2,7 +2,13 @@
 
 # Armado de CenfoBot
 
-> Puede ver las instrucciones detalladas en este video
+<p align="center">
+  <a href="https://youtu.be/D-QwH3aJilM">
+    <img src="https://img.youtube.com/vi/D-QwH3aJilM/maxresdefault.jpg" width="600">
+  </a>
+  <br>
+  <b>▶ Ver video en YouTube</b>
+</p>
 
 Esta guía describe, paso a paso, el proceso de ensamblaje físico de **CenfoBot**, siguiendo el orden mostrado en el video de armado.
 
