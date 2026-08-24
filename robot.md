@@ -2,7 +2,13 @@
 
 ## Que se les entrega
 
-> Ver video que muestra lo que se entrega grátis
+<p align="center">
+  <a href="https://youtu.be/GQzHki5-4RM">
+    <img src="https://img.youtube.com/vi/GQzHki5-4RM/maxresdefault.jpg" width="600">
+  </a>
+  <br>
+  <a href="https://youtu.be/GQzHki5-4RM"><b>▶ Ver video en YouTube</b></a>
+</p>
 
 - 2 kits de CenfoBot
 - 3 cubos (rojo, azul y verde)
@@ -11,7 +17,13 @@
 
 ## Componetes del kit de CenfoBot
 
-> En este video puede ver lo que contiene el kit de CenfoBot
+<p align="center">
+  <a href="https://youtu.be/gN2MMhoahYY">
+    <img src="https://img.youtube.com/vi/gN2MMhoahYY/maxresdefault.jpg" width="600">
+  </a>
+  <br>
+  <a href="https://youtu.be/gN2MMhoahYY"><b>▶ Ver video en YouTube</b></a>
+</p>
 
 ## Especificaciones de los robots
 
