@@ -1,5 +1,3 @@
-<img src="armado.jpeg" width="600">
-
 # Armado de CenfoBot
 
 <p align="center">
