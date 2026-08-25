@@ -66,6 +66,7 @@ class MarcadoresEsquina:
     disposicion: dict[int, tuple[float, float]]
     lado_mm: float
     borde_blanco_mm: float
+    desvio_maximo_mm: float
 
     @property
     def ids_esperados(self) -> frozenset[int]:
@@ -158,6 +159,67 @@ class DesfaseMarcadorRobot:
 
 
 @dataclass(frozen=True, slots=True)
+class Seguimiento:
+    """Memoria entre cuadros: la última observación buena y la edad.
+
+    Acá **no hay problema de asociación**, que es el problema difícil de todo
+    seguimiento. Cada objeto de este reto trae su propia identidad —el rover en
+    el ID de su marcador, el cubo en su color— así que no hay que adivinar qué
+    detección de este cuadro corresponde a cuál del anterior: viene escrito.
+
+    `edad_maxima_ms` no es para oclusiones —para eso está la edad, y el contrato
+    promete que un objeto tapado no desaparece— sino para barrer **fantasmas**:
+    detecciones espurias que nunca se repiten, u objetos que de verdad se fueron.
+    """
+
+    edad_maxima_ms: int
+    refrescar_con_cubos_no_confiables: bool
+
+
+@dataclass(frozen=True, slots=True)
+class Publicacion:
+    """Reloj y puerto de la publicación de telemetría.
+
+    El transporte no está acá: vive en `contrato/publicador.py`, compartido con
+    el simulador. Esto es solo lo propio de este lado.
+
+    El reloj es **propio y no el de la cámara**: son dos relojes que no deben
+    esperarse. Si un cuadro tarda de más, la publicación no se frena; si un
+    cliente tiene la red lenta, el procesamiento ni se entera.
+    """
+
+    puerto: int
+    hz: float
+
+
+@dataclass(frozen=True, slots=True)
+class Deposito:
+    """Una zona de acopio: dónde está y de qué color."""
+
+    color: str
+    col: float
+    row: float
+
+
+@dataclass(frozen=True, slots=True)
+class Lugares:
+    """Los lugares fijos de la cancha: la salida y las tres zonas de acopio.
+
+    **Se declaran, no se detectan.** Están siempre, no se mueven y no envejecen,
+    así que buscarlos en cada cuadro sería trabajo perdido y una fuente de ruido
+    donde no hace falta. Por eso viajan en el mensaje en listas separadas de los
+    cubos, aunque compartan el color.
+
+    El contrato los exige en **cada** mensaje: sin ellos el sistema de visión
+    sabría dónde está cada objeto y no sabría adónde hay que llevarlo.
+    """
+
+    start_col: float
+    start_row: float
+    depositos: tuple[Deposito, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class DeteccionRovers:
     """Cómo se pasa de marcadores detectados a rovers.
 
@@ -208,6 +270,30 @@ class MedicionDesfases:
 
 
 @dataclass(frozen=True, slots=True)
+class DeteccionCubos:
+    """Cómo se encuentran los cubos por su color.
+
+    Se segmenta por **croma** en Lab —el tablero es acromático, así que todo lo
+    saturado es objeto— y se clasifica por **matiz**, que es casi invariante a
+    la iluminación: un cubo rojo a la sombra sigue teniendo matiz de rojo.
+
+    El amarillo está entre los matices de referencia aunque esta edición no
+    tenga obstáculos, y **no es un cubo**: es una clase de exclusión. Verde y
+    amarillo están a solo 33° —el par más ajustado—, así que sin ella cualquier
+    objeto amarillo suelto se leería como cubo verde.
+    """
+
+    croma_minimo: float
+    matices_grados: dict[str, float]
+    matiz_tolerancia_grados: float
+    area_minima_relativa: float
+    area_maxima_relativa: float
+    recorte_robusto: float
+    residuo_maximo_celdas: float
+    pasos_refinamiento: int
+
+
+@dataclass(frozen=True, slots=True)
 class Paralaje:
     """Alturas para la corrección de paralaje. ETAPA TODAVÍA NO CONSTRUIDA.
 
@@ -230,10 +316,46 @@ class Paralaje:
 
 @dataclass(frozen=True, slots=True)
 class Perspectiva:
-    """Inclinación simulada de la cámara para las imágenes sintéticas."""
+    """Inclinación FÍSICA de la cámara sintética, en grados.
+
+    Es el ángulo entre el eje óptico y la vertical. La cámara se corre de lado y
+    sigue apuntando al centro del tablero, que es lo que pasa cuando un soporte
+    real no quedó perfectamente a plomo.
+    """
 
     activa: bool
-    inclinacion: float
+    inclinacion_grados: float
+
+
+@dataclass(frozen=True, slots=True)
+class CuerpoRover:
+    """Tamaño del chasis, SOLO para dibujarlo en la imagen sintética.
+
+    ⚠️ Medidas provisionales, no medidas sobre el robot real. No entran en
+    ningún número que el sistema publique: existen porque sin un cuerpo que
+    tape, no se puede verificar el caso más importante del juego —el rover
+    empujando un cubo y ocultándole la arista de la base—.
+    """
+
+    ancho_mm: float
+    largo_mm: float
+    alto_mm: float
+    gris: int
+
+
+@dataclass(frozen=True, slots=True)
+class CuboDemo:
+    """Un cubo de ejemplo para las imágenes de prueba.
+
+    `theta` es su rotación sobre el piso. No se publica —el contrato no lleva
+    orientación de cubo— pero cambia la forma de la silueta, y el detector tiene
+    que dar igual con cualquier rotación.
+    """
+
+    color: str
+    col: float
+    row: float
+    theta: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,9 +365,14 @@ class Sintetico:
     ancho_px: int
     alto_px: int
     margen_px: int
+    altura_camara_mm: float
     lado_marcador_esquina_celdas: float
     lado_marcador_rover_celdas: float
     borde_blanco_celdas: float
+    colores_cubo_bgr: dict[str, tuple[int, int, int]]
+    brillo_tapa: float
+    brillo_lateral: float
+    cuerpo_rover: CuerpoRover
     color_fondo: int
     color_grilla: int
     dibujar_grilla: bool
@@ -380,7 +507,11 @@ class ConfigVision:
     tablero: Tablero
     marcadores_esquina: MarcadoresEsquina
     elementos: Elementos
+    lugares: Lugares
+    seguimiento: Seguimiento
+    publicacion: Publicacion
     deteccion_rovers: DeteccionRovers
+    deteccion_cubos: DeteccionCubos
     medicion_desfases: MedicionDesfases
     paralaje: Paralaje
     sintetico: Sintetico
@@ -388,6 +519,7 @@ class ConfigVision:
     calibracion: Calibracion
     precision: Precision
     rovers_demo: tuple[RoverDemo, ...]
+    cubos_demo: tuple[CuboDemo, ...]
 
 
 def diccionario_aruco(nombre: str):
@@ -530,9 +662,29 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         disposicion=_leer_disposicion(m["disposicion"], tablero.cols, tablero.rows),
         lado_mm=float(m["lado_mm"]),
         borde_blanco_mm=float(m["borde_blanco_mm"]),
+        desvio_maximo_mm=float(m["desvio_maximo_mm"]),
     )
 
     elementos = _leer_elementos(d["elementos"])
+
+    sg = d["seguimiento"]
+    seguimiento = Seguimiento(
+        edad_maxima_ms=int(sg["edad_maxima_ms"]),
+        refrescar_con_cubos_no_confiables=bool(sg["refrescar_con_cubos_no_confiables"]),
+    )
+
+    pu = d["publicacion"]
+    publicacion = Publicacion(puerto=int(pu["puerto"]), hz=float(pu["hz"]))
+
+    lu = d["lugares"]
+    lugares = Lugares(
+        start_col=float(lu["start"]["col"]),
+        start_row=float(lu["start"]["row"]),
+        depositos=tuple(
+            Deposito(color=str(x["color"]), col=float(x["col"]), row=float(x["row"]))
+            for x in lu["depots"]
+        ),
+    )
 
     dr = d["deteccion_rovers"]
     desf = dr["desfase_marcador_a_centro_mm"]
@@ -543,6 +695,18 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
             izquierda_mm=float(desf["izquierda"]),
         ),
         desfase_angular_grados=float(dr["desfase_angular_grados"]),
+    )
+
+    dc = d["deteccion_cubos"]
+    deteccion_cubos = DeteccionCubos(
+        croma_minimo=float(dc["croma_minimo"]),
+        matices_grados={k: float(v) for k, v in dc["matices_lab_grados"].items()},
+        matiz_tolerancia_grados=float(dc["matiz_tolerancia_grados"]),
+        area_minima_relativa=float(dc["area_minima_relativa"]),
+        area_maxima_relativa=float(dc["area_maxima_relativa"]),
+        recorte_robusto=float(dc["recorte_robusto"]),
+        residuo_maximo_celdas=float(dc["residuo_maximo_celdas"]),
+        pasos_refinamiento=int(dc["pasos_refinamiento"]),
     )
 
     md = d["medicion_desfases"]
@@ -574,16 +738,32 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         ancho_px=int(s["ancho_px"]),
         alto_px=int(s["alto_px"]),
         margen_px=int(s["margen_px"]),
+        altura_camara_mm=float(s["altura_camara_mm"]),
         lado_marcador_esquina_celdas=float(s["lado_marcador_esquina_celdas"]),
         lado_marcador_rover_celdas=float(s["lado_marcador_rover_celdas"]),
         borde_blanco_celdas=float(s["borde_blanco_celdas"]),
+        # Se guarda en BGR porque es lo que espera OpenCV; en el JSON va en RGB,
+        # que es como la gente piensa un color.
+        colores_cubo_bgr={
+            nombre: (int(rgb[2]), int(rgb[1]), int(rgb[0]))
+            for nombre, rgb in s["colores_cubo_rgb"].items()
+        },
+        brillo_tapa=float(s["brillo_tapa"]),
+        brillo_lateral=float(s["brillo_lateral"]),
+        cuerpo_rover=CuerpoRover(
+            ancho_mm=float(s["cuerpo_rover"]["ancho_mm"]),
+            largo_mm=float(s["cuerpo_rover"]["largo_mm"]),
+            alto_mm=float(s["cuerpo_rover"]["alto_mm"]),
+            gris=int(s["cuerpo_rover"]["gris"]),
+        ),
         color_fondo=int(s["color_fondo"]),
         color_grilla=int(s["color_grilla"]),
         dibujar_grilla=bool(s["dibujar_grilla"]),
         paso_grilla_celdas=int(s["paso_grilla_celdas"]),
         desenfoque_px=int(s["desenfoque_px"]),
         ruido_sigma=float(s["ruido_sigma"]),
-        perspectiva=Perspectiva(activa=bool(p["activa"]), inclinacion=float(p["inclinacion"])),
+        perspectiva=Perspectiva(activa=bool(p["activa"]),
+                                inclinacion_grados=float(p["inclinacion_grados"])),
     )
 
     camara = _leer_camara(d["camara"])
@@ -595,11 +775,21 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         for r in d.get("rovers_demo", ())
     )
 
+    cubos = tuple(
+        CuboDemo(color=str(c["color"]), col=float(c["col"]), row=float(c["row"]),
+                 theta=float(c.get("theta", 0.0)))
+        for c in d.get("cubos_demo", ())
+    )
+
     cfg = ConfigVision(
         tablero=tablero,
         marcadores_esquina=marcadores,
         elementos=elementos,
+        lugares=lugares,
+        seguimiento=seguimiento,
+        publicacion=publicacion,
         deteccion_rovers=deteccion_rovers,
+        deteccion_cubos=deteccion_cubos,
         medicion_desfases=medicion_desfases,
         paralaje=paralaje,
         sintetico=sintetico,
@@ -607,6 +797,7 @@ def cargar_config(ruta: str = CONFIG_POR_DEFECTO) -> ConfigVision:
         calibracion=calibracion,
         precision=precision,
         rovers_demo=rovers,
+        cubos_demo=cubos,
     )
     error = revisar_config(cfg)
     if error is not None:
@@ -633,6 +824,11 @@ def revisar_config(cfg: ConfigVision) -> str | None:
         return "hay dos marcadores de esquina asignados a la misma esquina"
     if cfg.marcadores_esquina.lado_mm <= 0:
         return "marcadores_esquina.lado_mm debe ser > 0 (es el tamaño del marcador impreso)"
+    if cfg.marcadores_esquina.desvio_maximo_mm <= 0:
+        return (
+            "marcadores_esquina.desvio_maximo_mm debe ser > 0: es el umbral que decide "
+            "si la geometría guardada sigue valiendo cuando falta un marcador"
+        )
     if cfg.marcadores_esquina.borde_blanco_mm <= 0:
         return (
             "marcadores_esquina.borde_blanco_mm debe ser > 0: sin zona blanca alrededor "
@@ -677,6 +873,64 @@ def revisar_config(cfg: ConfigVision) -> str | None:
             "deteccion_rovers.desfase_angular_grados = {} está fuera de [-360, 360]; "
             "es un ángulo, no una cantidad de vueltas".format(dr.desfase_angular_grados)
         )
+    if cfg.seguimiento.edad_maxima_ms <= 0:
+        return "seguimiento.edad_maxima_ms debe ser > 0"
+    if not (0 < cfg.publicacion.puerto < 65536):
+        return "publicacion.puerto fuera de rango"
+    if cfg.publicacion.hz <= 0:
+        return "publicacion.hz debe ser > 0"
+    lug = cfg.lugares
+    colores_cubo = set(cfg.elementos.cubos.colores)
+    colores_deposito = [dep.color for dep in lug.depositos]
+    if sorted(colores_deposito) != sorted(colores_cubo):
+        return (
+            "lugares.depots tiene los colores {} y los cubos son {}: cada cubo tiene que "
+            "tener un depósito de SU color, y el contrato lo exige".format(
+                sorted(colores_deposito), sorted(colores_cubo))
+        )
+    if len(set(colores_deposito)) != len(colores_deposito):
+        return "lugares.depots: hay dos depósitos del mismo color"
+    puntos = [("start", lug.start_col, lug.start_row)]
+    puntos += [("depot " + dep.color, dep.col, dep.row) for dep in lug.depositos]
+    for nombre, col, row in puntos:
+        if not (0.0 <= col <= cfg.tablero.cols and 0.0 <= row <= cfg.tablero.rows):
+            return (
+                "lugares: {} está en ({}, {}), fuera de la cancha de {}x{} celdas".format(
+                    nombre, col, row, cfg.tablero.cols, cfg.tablero.rows)
+            )
+    dc_cfg = cfg.deteccion_cubos
+    faltan_matices = sorted(set(cfg.elementos.cubos.colores) - set(dc_cfg.matices_grados))
+    if faltan_matices:
+        return (
+            "deteccion_cubos.matices_lab_grados no tiene matiz de referencia para {}: "
+            "esos cubos no se podrían clasificar".format(faltan_matices)
+        )
+    if "yellow" not in dc_cfg.matices_grados:
+        return (
+            "deteccion_cubos.matices_lab_grados debe incluir 'yellow' como clase de "
+            "EXCLUSIÓN: está a 33° del verde, y sin ella un objeto amarillo se leería "
+            "como cubo verde"
+        )
+    if not (0.0 < dc_cfg.recorte_robusto <= 1.0):
+        return "deteccion_cubos.recorte_robusto debe estar en (0, 1]"
+    if dc_cfg.croma_minimo <= 0:
+        return "deteccion_cubos.croma_minimo debe ser > 0"
+    colores_dibujo = set(cfg.sintetico.colores_cubo_bgr)
+    faltan_colores = sorted(set(cfg.elementos.cubos.colores) - colores_dibujo)
+    if faltan_colores:
+        return (
+            "sintetico.colores_cubo_rgb no tiene con qué dibujar {}: el generador no "
+            "podría producir imágenes de prueba de esos cubos".format(faltan_colores)
+        )
+    colores_validos = set(cfg.elementos.cubos.colores)
+    for cubo in cfg.cubos_demo:
+        if cubo.color not in colores_validos:
+            return (
+                "cubos_demo: el color {!r} no está en elementos.cubos.colores ({})".format(
+                    cubo.color, sorted(colores_validos))
+            )
+    if len({c.color for c in cfg.cubos_demo}) != len(cfg.cubos_demo):
+        return "cubos_demo: hay dos cubos del mismo color, y el color ES la identidad"
     m = cfg.medicion_desfases
     if m.muestras_minimas < 3:
         return (
@@ -728,8 +982,10 @@ def revisar_config(cfg: ConfigVision) -> str | None:
                 s.margen_px, vuelo_celdas, vuelo_celdas * ppc
             )
         )
-    if not (0.0 <= s.perspectiva.inclinacion < 0.5):
-        return "perspectiva.inclinacion debe estar en [0, 0.5)"
+    if not (0.0 <= s.perspectiva.inclinacion_grados < 60.0):
+        return "perspectiva.inclinacion_grados debe estar en [0, 60): es un ángulo físico"
+    if s.altura_camara_mm <= 0:
+        return "sintetico.altura_camara_mm debe ser > 0"
     c = cfg.camara
     if isinstance(c.indice, str):
         if c.indice.lower() not in ("menu", "auto"):

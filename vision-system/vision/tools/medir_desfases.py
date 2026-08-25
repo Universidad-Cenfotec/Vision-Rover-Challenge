@@ -593,7 +593,7 @@ def simular_giro(cfg, adelante_mm, izquierda_mm, desfase_angular, centro_celda,
     ajuste, acá se ve.
     """
     cell = cfg.tablero.cell_mm
-    persp = Perspectiva(activa=con_perspectiva, inclinacion=cfg.sintetico.perspectiva.inclinacion)
+    persp = Perspectiva(activa=con_perspectiva, inclinacion_grados=cfg.sintetico.perspectiva.inclinacion_grados)
     centro = np.array(centro_celda, dtype=np.float64)
 
     muestras = []
@@ -657,7 +657,15 @@ def autoprueba(cfg, con_perspectiva: bool) -> bool:
         alfas = [diferencia_angular(theta, phi) for theta, (_, _, phi) in zip(pasos, muestras)]
         angular, dispersion_ang = media_circular(alfas)
 
-        centro_a_marcador = a_marco_robot(ajuste.desfase_marco_marcador, angular) * cell
+        # Se verifica el valor CORREGIDO, que es el que la herramienta recomienda
+        # pegar en la configuración. El crudo viene inflado por el paralaje: el
+        # marcador está a 90 mm del tablero, así que el círculo que describe se
+        # ve más grande de lo que es. Comparar el crudo daría un error de 1,5 mm
+        # que no es del estimador sino del efecto que la corrección descuenta.
+        k = factor_paralaje(cfg.sintetico.altura_camara_mm,
+                            cfg.paralaje.altura_marcador_rover_mm)
+        crudo = a_marco_robot(ajuste.desfase_marco_marcador, angular) * cell
+        centro_a_marcador = crudo / k
         err_a = abs(centro_a_marcador[0] - ADELANTE)
         err_i = abs(centro_a_marcador[1] - IZQUIERDA)
         err_ang = abs(diferencia_angular(angular, ANGULAR))
@@ -675,6 +683,9 @@ def autoprueba(cfg, con_perspectiva: bool) -> bool:
         print("  {:<26} {:>8} {:>10} {:>10} {:>10}".format(
             "   error contra la verdad", "", "{:.2f} mm".format(err_a),
             "{:.2f} mm".format(err_i), "{:.2f}°".format(err_ang)))
+        print("  {:<26} {:>8} {:>10.2f} {:>10.2f} {:>10}".format(
+            "   crudo, antes de paralaje", "", crudo[0], crudo[1],
+            "x{:.4f}".format(k)))
         print("  {:<26} {:>8} {:>10} {:>10} {:>10}".format(
             "   centro / residuo / acuerdo", "",
             "{:.2f} mm".format(err_centro),

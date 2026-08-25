@@ -30,6 +30,23 @@ marcadores no probaría nada. Corre en dos modos, con y sin inclinación de
 cámara, y devuelve código de salida distinto de cero si algún grupo se pasa del
 umbral.
 
+#### Y un tercer bloque: la degradación
+
+Además comprueba **qué pasa si se pierde un marcador de esquina**, tapándolos de
+verdad sobre la imagen —agrandando el cuadrilátero para tapar también la zona
+blanca, que es exactamente cómo se pierde un marcador en la cancha real—.
+
+| Situación | Qué se exige |
+|---|---|
+| Los cuatro visibles | recalcula, 0,520 mm |
+| Uno tapado | conserva y verifica: **0,520 mm**, la misma precisión |
+| Dos tapados | **rechaza**: no hay con qué comprobar nada |
+| Uno tapado y la cámara movida 0,5° o 2° | **rechaza**: los tres visibles la delatan |
+| Uno tapado y la cámara movida 0,1° | acepta, y es correcto: son 0,62 mm de error |
+
+El detalle de por qué con tres se conserva en vez de reajustar está en
+[`../geometry/README.md`](../geometry/README.md).
+
 ### `verificar_rovers.py`
 
 Verifica la **detección de rovers** contra la misma verdad conocida: genera
@@ -60,6 +77,55 @@ razonables y estar todo mal.
 El escenario del salto angular imprime, al lado, la **resta ingenua** y la
 diferencia bien calculada, para que se vea el problema en vez de tener que
 creerlo.
+
+### `verificar_cubos.py`
+
+Verifica la **detección de cubos**: que los encuentre por color, que los ubique
+por su **base** —que es lo que el contrato publica— y que aguante que un rover
+los tape.
+
+```bash
+python -m vision.tools.verificar_cubos
+python -m vision.tools.verificar_cubos --salida /tmp/cubos.png --anotar
+```
+
+Cinco escenarios en los dos modos de cámara: los tres cubos de la configuración,
+cubos repartidos por la cancha, tres rotaciones distintas, un rover **empujando**
+el cubo, y un rover tapándolo aún más.
+
+Cada fila reporta el ajuste **al lado del centroide ingenuo** —el método que se
+descartó— para que la diferencia se vea en vez de haber que creerla. Con la
+cámara inclinada: **1,05 mm** contra 9,84 con el cubo despejado, y **4,88 mm**
+contra 17,01 con un rover empujándolo.
+
+> **El último escenario cambia de pregunta.** Con el 70 % del cubo tapado el
+> ajuste llega a errar más que el centroide: cuando se le acaba la evidencia, el
+> método se degrada. Ahí no se le exige **acertar** sino **no mentir**, y lo que
+> se comprueba es que la detección se marque como no confiable.
+
+### `verificar_seguimiento.py`
+
+Verifica que el seguimiento cumpla **la promesa del contrato sobre oclusión**:
+que un objeto tapado no desaparezca de su lista.
+
+```bash
+python -m vision.tools.verificar_seguimiento
+```
+
+La sección 8 de [`CONTRATO.md`](../../contrato/CONTRATO.md) hace cuatro
+afirmaciones comprobables, y cada escenario las comprueba todas: mientras el
+objeto está tapado **sigue en la lista**, su **posición no se mueve**, su **edad
+crece** y coincide con el tiempo transcurrido, y al reaparecer **vuelve a cero**.
+
+| Escenario | Qué pone a prueba |
+|---|---|
+| El cubo verde deja de verse | la oclusión total |
+| Al rover 11 se le tapa el marcador | que los rovers reciben el mismo trato |
+| Un rover tapa el cubo hasta volverlo no confiable | que una detección dudosa **no** refresca |
+
+Se prueba con **cuadros generados y procesados de punta a punta**, no con
+detecciones escritas a mano: así se ejercitan detección, confiabilidad y memoria
+juntas, en vez de comprobar solo que un diccionario recuerda cosas.
 
 ### `medir_desfases.py`
 
@@ -393,5 +459,12 @@ Planificado, sin código aún:
 
 - **Guía de alineamiento.** Ayudar a colocar la cámara en la posición correcta
   sobre la cancha, indicando en vivo qué corregir.
-- **Monitor en vivo.** Ver el estado del mundo sobre la imagen de la cámara en
-  tiempo real, para la puesta a punto antes de una ronda.
+> **El monitor en vivo ya existe**, y no está acá: es
+> [`vision/vista.py`](../vista.py), una ventana **del propio sistema**
+> (`python -m vision.sistema --ventana`).
+>
+> No es una herramienta de `tools/` a propósito. Un monitor separado tendría que
+> abrir la cámara —y una webcam solo se puede abrir una vez— o reimplementar la
+> detección, y en los dos casos mostraría **su** interpretación en vez de la del
+> sistema. Un monitor que puede discrepar de lo que se publica es peor que no
+> tener monitor.

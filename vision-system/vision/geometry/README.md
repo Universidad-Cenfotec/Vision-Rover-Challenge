@@ -12,6 +12,10 @@ Detecta los cuatro marcadores ArUco de esquina, verifica que estén los cuatro
 IDs esperados y construye la transformación que convierte cualquier píxel de la
 imagen en una coordenada en celdas.
 
+> `construir_sistema` exige los cuatro. Para el bucle de producción está
+> **`AnclajeCancha`**, que aguanta que se pierda uno sin perder precisión: ver
+> [más abajo](#anclajecancha--qué-pasa-si-se-pierde-un-marcador).
+
 ```python
 from vision.configuracion import cargar_config
 from vision.geometry.coordenadas import construir_sistema
@@ -139,12 +143,112 @@ que ya existe** por otro motivo; si no, queda como dato informativo.
 
 Para generar un perfil, ver [`../tools/README.md`](../tools/README.md).
 
+### `AnclajeCancha` — qué pasa si se pierde un marcador
+
+Un reflejo pasajero, una mano durante la puesta a punto, un marcador que se
+despega. Antes, perder uno de los cuatro dejaba el sistema **ciego**: la
+geometría fallaba y el falla-abierto seguía publicando el último estado bueno con
+la edad creciendo.
+
+#### Con tres no se puede reajustar
+
+Una homografía tiene **ocho grados de libertad** y cada punto aporta dos
+ecuaciones: cuatro la determinan justo, tres dan seis, y lo que falta son
+exactamente los términos de perspectiva. Con tres solo se puede ajustar una
+transformación **afín**, exacta únicamente con la cámara perfectamente cenital —
+y la cámara real nunca lo está.
+
+| Inclinación | Homografía (4) | Afín (3) |
+|---|---|---|
+| 0° | 0,00 mm | 0,00 mm |
+| 8° | 0,52 mm | **36,60 mm** |
+| 15° | 0,46 mm | **66,90 mm** |
+
+#### Pero sí se puede conservar
+
+**La cámara está atornillada** y los marcadores pegados al tablero: la homografía
+es prácticamente constante. Recalcularla en cada cuadro nunca fue una necesidad
+sino una función de robustez, para reanclarse solo si alguien la golpea.
+
+Así que con tres visibles se **conserva la última buena**, y la precisión no se
+degrada **nada** —0,520 mm con cuatro, 0,520 mm con tres— porque es literalmente
+la misma homografía.
+
+#### Y los tres que quedan sirven para vigilar
+
+Conservar una homografía vieja sería un desastre silencioso si la cámara se
+movió. Tres marcadores no alcanzan para reajustar, pero **alcanzan de sobra para
+detectarlo**: se los reproyecta con la homografía guardada y se mira si caen
+donde deben.
+
+| La cámara se movió | Desvío que acusan los 3 | Error real | Veredicto |
+|---|---|---|---|
+| 0,1° | 0,69 mm | 0,62 mm | acepta |
+| 0,5° | 2,70 mm | 1,47 mm | **rechaza** |
+| 2,0° | 9,66 mm | 5,01 mm | **rechaza** |
+
+La comprobación es **conservadora por construcción**: siempre acusa más de lo que
+el error realmente vale. Por eso el umbral de 2 mm de `desvio_maximo_mm`
+corresponde a menos de 1,5 mm de error real.
+
+#### Los tres escalones
+
+| Visibles | Qué hace |
+|---|---|
+| **4** | recalcula la homografía |
+| **3** | conserva la última buena **y la verifica** con los tres |
+| **≤ 2** | rechaza: no hay con qué comprobar que la cámara no se movió |
+
+**No hay límite de tiempo**, y es a propósito: lo que autoriza a conservar la
+homografía no es que haya pasado poco tiempo sino que los tres visibles **siguen
+confirmándola en cada cuadro**. La salvaguarda es la verificación, no un
+cronómetro. Consecuencia práctica: si un marcador se despega a mitad de ronda, el
+sistema sigue con precisión completa en vez de quedarse ciego.
+
+### `coordenadas.py` — la pose de cámara y el paralaje
+
+Los objetos **altos** no se ven donde están: se ven corridos **hacia afuera**,
+alejándose del punto que está justo debajo de la cámara. El marcador del rover
+está a 90 mm del tablero, y eso son hasta **41 mm** de error con la cámara
+inclinada, contra un criterio de aceptación de 10.
+
+Los cuatro marcadores de esquina **no pueden corregirlo por sí solos**: están al
+ras del tablero, así que no contienen ninguna información sobre cuánto se
+desplaza algo que tiene altura. Hace falta la **pose de la cámara**.
+
+**Y no hay que declararla.** Los cuatro centros son puntos coplanares de posición
+métrica conocida y la cámara está calibrada, así que `solvePnP` da la pose
+completa. Nadie mide 2,1 m con una cinta: sale de los mismos marcadores que el
+sistema ya tiene que ver, y si alguien mueve la cámara, el cuadro siguiente trae
+una pose nueva.
+
+> Los intrínsecos que se usan son los de la imagen **ya rectificada**
+> (`Rectificador.matriz_nueva`) y no los del perfil: quitar la distorsión cambia
+> los intrínsecos efectivos, y usar los de antes metería un error que después
+> nadie sabría de dónde salió.
+
+La corrección es una **homotecia centrada en el nadir** con factor `(H−h)/H`, y
+es exacta para cualquier inclinación de cámara porque el rayo solo depende del
+centro óptico y no de hacia dónde mire.
+
+| Inclinación | Sin corregir | Corregido |
+|---|---|---|
+| 0° | 19,44 mm | **0,43 mm** |
+| 8° | 30,07 mm | **1,03 mm** |
+| 15° | 41,29 mm | **0,89 mm** |
+
+Medido sobre 36 rovers repartidos por toda la cancha. Entre 30 y 45 veces mejor.
+
+Dos propiedades que conviene saber:
+
+- **El ángulo no se toca.** Una homotecia conserva las direcciones, así que la
+  orientación del rover ya era correcta antes de corregir nada.
+- **Es muy insensible al error de la pose.** Como solo escala por `(1−1/k)`, un
+  4,3 %, trece milímetros de error en el nadir se traducen en 0,6 mm de posición.
+
+Los **cubos no la necesitan**: se ubican por su borde inferior, que está en el
+piso, y ahí el factor vale exactamente 1.
+
 ## Lo que todavía NO existe
 
 Planificado, sin código aún:
-
-- **Corrección de paralaje.** Los objetos **altos** —un cubo de 6 cm, el marcador
-  de un rover a unos 10 cm— no se ven donde están: se ven corridos **hacia
-  afuera**, alejándose del centro de la cámara, porque la cámara los mira de
-  costado. Se corrige con la **pose de cámara** deducida de los cuatro marcadores
-  más la **altura conocida** de cada objeto.

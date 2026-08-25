@@ -164,6 +164,230 @@ def centro_de(esquinas: np.ndarray) -> tuple[float, float]:
     return (float(centro[0]), float(centro[1]))
 
 
+class AnclajeCancha:
+    """Mantiene el sistema de coordenadas cuadro a cuadro, aguantando un marcador menos.
+
+    Por qué hace falta
+    ------------------
+    `construir_sistema` exige los cuatro marcadores, y con razón: una homografía
+    tiene **ocho grados de libertad** y cada punto aporta dos ecuaciones, así que
+    cuatro puntos la determinan justo. Con tres solo alcanza para una
+    transformación **afín**, y lo que falta son exactamente los términos de
+    perspectiva. Medido contra la verdad del generador, con la cámara a 8°: la
+    afín erra **36 mm** donde la homografía erra 0,52.
+
+    Pero reajustar no es la única opción, y no es la mejor.
+
+    La cámara está atornillada
+    --------------------------
+    Los marcadores están pegados al tablero y la cámara no se mueve durante una
+    ronda: **la homografía es prácticamente constante**. Recalcularla en cada
+    cuadro no es una necesidad sino una función de robustez, para reanclarse solo
+    si alguien la golpea.
+
+    Entonces, con tres visibles, lo correcto es **conservar la última buena**. La
+    precisión no se degrada nada, porque es literalmente la misma homografía.
+
+    Y los tres que quedan sirven para vigilar
+    -----------------------------------------
+    Conservar una homografía vieja sería un desastre silencioso si la cámara se
+    movió. Pero tres marcadores alcanzan de sobra para **detectarlo**: se los
+    reproyecta con la homografía guardada y se mira si caen donde deben.
+
+    La comprobación es **conservadora por construcción**: siempre acusa más de lo
+    que el error realmente vale. Medido, con la cámara movida 0,25°, los tres
+    acusan 1,58 mm mientras el error real de posición es 0,92. Por eso el umbral
+    en milímetros de desvío se traduce en un error real menor.
+
+    No hay límite de tiempo para seguir así, y es a propósito: lo que autoriza a
+    conservar la homografía no es que haya pasado poco tiempo, sino que los tres
+    marcadores visibles **siguen confirmándola en cada cuadro**. La salvaguarda
+    es la verificación, no un cronómetro.
+    """
+
+    def __init__(self, cfg: ConfigVision):
+        self._cfg = cfg
+        self._sistema: SistemaCoordenadas | None = None
+        #: Cuántos cuadros seguidos se viene conservando la homografía.
+        self.cuadros_conservados = 0
+        #: Cuántas esquinas se vieron en el último cuadro.
+        self.esquinas_visibles = 0
+        #: Cuánto se desviaron las visibles de donde deberían estar, en mm.
+        self.desvio_mm = 0.0
+
+    def actualizar(self, imagen: np.ndarray, detectados: dict[int, np.ndarray]) -> SistemaCoordenadas:
+        """Devuelve el sistema de coordenadas de este cuadro.
+
+        Lanza `ErrorGeometria` cuando no se puede sostener: con dos marcadores o
+        menos, o cuando los tres visibles delatan que la cámara se movió.
+        """
+        esperados = self._cfg.marcadores_esquina.ids_esperados
+        visibles = sorted(esperados & set(detectados))
+        self.esquinas_visibles = len(visibles)
+
+        if len(visibles) == 4:
+            self._sistema = construir_sistema(imagen, self._cfg, detectados)
+            self.cuadros_conservados = 0
+            self.desvio_mm = 0.0
+            return self._sistema
+
+        if self._sistema is None:
+            raise ErrorGeometria(
+                "hacen falta los cuatro marcadores de esquina para arrancar; se ven {}. "
+                "Todavía no hay un sistema de coordenadas anterior que conservar.".format(visibles)
+            )
+        if len(visibles) < 3:
+            raise ErrorGeometria(
+                "solo se ven {} marcadores de esquina. Con menos de tres no se puede "
+                "comprobar que la cámara no se haya movido, así que la homografía "
+                "guardada deja de ser confiable.".format(len(visibles))
+            )
+
+        # Tres visibles: se conserva la homografía y se la somete a los tres.
+        self.desvio_mm = self._desvio(detectados, visibles)
+        if self.desvio_mm > self._cfg.marcadores_esquina.desvio_maximo_mm:
+            self.cuadros_conservados = 0
+            raise ErrorGeometria(
+                "se ven 3 marcadores de esquina y NO confirman la geometría guardada: "
+                "se desvían {:.2f} mm, más del máximo de {:.2f}. La cámara se movió, "
+                "así que las coordenadas viejas ya no valen.".format(
+                    self.desvio_mm, self._cfg.marcadores_esquina.desvio_maximo_mm)
+            )
+        self.cuadros_conservados += 1
+        return self._sistema
+
+    def _desvio(self, detectados: dict[int, np.ndarray], visibles: list[int]) -> float:
+        """Cuánto se apartan los marcadores visibles de donde deberían caer.
+
+        Se los pasa por la homografía guardada y se compara contra la celda que
+        declara la configuración. Si la cámara no se movió, el desvío es el
+        ruido de detección; si se movió, se dispara.
+        """
+        assert self._sistema is not None
+        observados = np.array([centro_de(detectados[i]) for i in visibles], dtype=np.float64)
+        recuperados = self._sistema.a_celdas(observados)
+        declarados = np.array(
+            [self._cfg.marcadores_esquina.disposicion[i] for i in visibles], dtype=np.float64
+        )
+        distancias = np.linalg.norm(recuperados - declarados, axis=1)
+        return float(distancias.max()) * self._cfg.tablero.cell_mm
+
+    @property
+    def conservando(self) -> bool:
+        """Si el cuadro actual está usando una homografía guardada."""
+        return self.cuadros_conservados > 0
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class PoseCamara:
+    """Dónde está la cámara respecto de la cancha, deducido de los marcadores.
+
+    Nadie mide esto con una cinta: sale de los cuatro marcadores de esquina, que
+    el sistema ya tiene que ver de todas formas. Si alguien mueve la cámara, el
+    cuadro siguiente trae una pose nueva y nadie tiene que acordarse de nada.
+
+    Para qué hace falta
+    -------------------
+    Las coordenadas NO la necesitan: la homografía de los cuatro centros alcanza
+    y sobra. La necesitan las dos cosas que dependen de que los objetos tengan
+    **altura**, porque los marcadores de esquina están al ras y no saben nada de
+    eso:
+
+    - la **corrección de paralaje**, que necesita `altura_mm` y `nadir_celdas`;
+    - la **detección de cubos**, que necesita saber hacia dónde está el nadir
+      para distinguir la base de la tapa.
+
+    `nadir_celdas` es la celda justo debajo de la cámara. Es el centro de la
+    homotecia del paralaje: un objeto ahí no se corre nada por alto que sea.
+    """
+
+    nadir_celdas: tuple[float, float]
+    altura_mm: float
+    error_reproyeccion_px: float
+
+    def factor_paralaje(self, altura_objeto_mm: float) -> float:
+        """`H/(H−h)`: cuánto se agranda lo que se ve de un objeto elevado."""
+        if altura_objeto_mm <= 0 or altura_objeto_mm >= self.altura_mm:
+            return 1.0
+        return self.altura_mm / (self.altura_mm - altura_objeto_mm)
+
+    def a_ras(self, celdas: np.ndarray, altura_objeto_mm: float) -> np.ndarray:
+        """Corrige el paralaje: de dónde SE VE un objeto elevado a dónde ESTÁ.
+
+        Es traer el punto hacia el nadir en la proporción `(H−h)/H`. Exacto para
+        cualquier inclinación de cámara, porque el rayo solo depende del centro
+        óptico y no de hacia dónde mire.
+        """
+        celdas = np.asarray(celdas, dtype=np.float64).reshape(-1, 2)
+        nadir = np.array(self.nadir_celdas, dtype=np.float64)
+        return nadir + (celdas - nadir) / self.factor_paralaje(altura_objeto_mm)
+
+    def elevar(self, celdas: np.ndarray, altura_objeto_mm: float) -> np.ndarray:
+        """El camino de vuelta: de dónde ESTÁ un objeto a dónde SE VE."""
+        celdas = np.asarray(celdas, dtype=np.float64).reshape(-1, 2)
+        nadir = np.array(self.nadir_celdas, dtype=np.float64)
+        return nadir + (celdas - nadir) * self.factor_paralaje(altura_objeto_mm)
+
+
+def pose_camara(sistema: SistemaCoordenadas, matriz_camara: np.ndarray) -> PoseCamara:
+    """Deduce dónde está la cámara a partir de los marcadores de esquina.
+
+    Los cuatro centros son puntos **coplanares de posición métrica conocida** —
+    están sobre el tablero, separados por `cols × cell_mm`— y la cámara está
+    calibrada. Con eso, `solvePnP` da la pose completa sin ningún dato más.
+
+    `matriz_camara` tiene que ser la de la imagen **ya rectificada**, que es
+    `Rectificador.matriz_nueva` y no la del perfil: quitar la distorsión cambia
+    los intrínsecos efectivos, y usar los de antes metería un error que después
+    nadie sabría de dónde salió.
+
+    Se devuelve el error de reproyección para que quien la use pueda decidir si
+    creerle. Es el único control disponible: no hay una verdad contra la cual
+    comparar en la cancha real.
+    """
+    ids = sorted(sistema.centros_px)
+    if len(ids) < 4:
+        raise ErrorGeometria(
+            "hacen falta los cuatro marcadores de esquina para deducir la pose de cámara"
+        )
+
+    # Mundo: X = col·cell, Y = −row·cell, Z hacia arriba. El menos en Y es la
+    # misma convención del generador, y es lo que hace que la imagen no salga
+    # espejada con una cámara que mira hacia abajo.
+    objeto = []
+    imagen = []
+    for id_aruco in ids:
+        col, row = sistema.celda_de(*sistema.centros_px[id_aruco])
+        objeto.append([col * sistema.cell_mm, -row * sistema.cell_mm, 0.0])
+        imagen.append(list(sistema.centros_px[id_aruco]))
+
+    objeto = np.array(objeto, dtype=np.float64)
+    imagen = np.array(imagen, dtype=np.float64)
+
+    ok, rvec, tvec = cv2.solvePnP(
+        objeto, imagen, np.asarray(matriz_camara, dtype=np.float64),
+        np.zeros(5, dtype=np.float64), flags=cv2.SOLVEPNP_IPPE,
+    )
+    if not ok:
+        raise ErrorGeometria("solvePnP no pudo resolver la pose de la cámara")
+
+    rot, _ = cv2.Rodrigues(rvec)
+    # El centro óptico en coordenadas del mundo.
+    centro = (-rot.T @ tvec).ravel()
+
+    reproyectado, _ = cv2.projectPoints(
+        objeto, rvec, tvec, np.asarray(matriz_camara, dtype=np.float64),
+        np.zeros(5, dtype=np.float64),
+    )
+    error = float(np.linalg.norm(reproyectado.reshape(-1, 2) - imagen, axis=1).max())
+
+    return PoseCamara(
+        nadir_celdas=(float(centro[0] / sistema.cell_mm), float(-centro[1] / sistema.cell_mm)),
+        altura_mm=float(centro[2]),
+        error_reproyeccion_px=error,
+    )
+
+
 def construir_sistema(
     imagen: np.ndarray,
     cfg: ConfigVision,

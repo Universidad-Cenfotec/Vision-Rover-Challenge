@@ -31,11 +31,14 @@ import numpy as np
 
 try:  # como paquete
     from ..configuracion import Perspectiva, cargar_config
-    from ..geometry.coordenadas import ErrorGeometria, construir_sistema, detectar_marcadores
+    from ..geometry.coordenadas import (
+        AnclajeCancha, ErrorGeometria, construir_sistema, detectar_marcadores,
+    )
     from ..sources.generador_sintetico import generar
 except ImportError:  # como script suelto
     from vision.configuracion import Perspectiva, cargar_config  # type: ignore[no-redef]
     from vision.geometry.coordenadas import (  # type: ignore[no-redef]
+        AnclajeCancha,
         ErrorGeometria,
         construir_sistema,
         detectar_marcadores,
@@ -90,7 +93,9 @@ def medir(verdad, sistema, celdas: np.ndarray) -> tuple[float, float]:
 
 def anotar(imagen: np.ndarray, sistema, verdad) -> np.ndarray:
     """Dibuja lo detectado sobre la imagen, para poder mirarla y creerle."""
-    lienzo = cv2.cvtColor(imagen, cv2.COLOR_GRAY2BGR)
+    # La fuente sintética ya entrega BGR, igual que la cámara real; se convierte
+    # solo si viniera en gris, para que la herramienta sirva con las dos.
+    lienzo = imagen.copy() if imagen.ndim == 3 else cv2.cvtColor(imagen, cv2.COLOR_GRAY2BGR)
     for id_aruco, (x, y) in sistema.centros_px.items():
         cv2.circle(lienzo, (int(round(x)), int(round(y))), 9, (0, 0, 255), 2)
         cv2.putText(
@@ -112,11 +117,11 @@ def anotar(imagen: np.ndarray, sistema, verdad) -> np.ndarray:
 def correr_modo(cfg, con_perspectiva: bool, umbral_mm: float, salida: str | None, quiere_anotar: bool) -> bool:
     """Corre la verificación completa en un modo. Devuelve True si pasó."""
     persp = Perspectiva(
-        activa=con_perspectiva, inclinacion=cfg.sintetico.perspectiva.inclinacion
+        activa=con_perspectiva, inclinacion_grados=cfg.sintetico.perspectiva.inclinacion_grados
     )
     imagen, verdad = generar(cfg, perspectiva=persp)
 
-    titulo = "CON perspectiva (inclinación {:.2f})".format(persp.inclinacion) if con_perspectiva else "SIN perspectiva (cenital perfecta)"
+    titulo = "CON perspectiva (cámara inclinada {:.1f}°)".format(persp.inclinacion_grados) if con_perspectiva else "SIN perspectiva (cenital perfecta)"
     print("=" * 78)
     print("MODO: {}".format(titulo))
     print("=" * 78)
@@ -174,6 +179,101 @@ def correr_modo(cfg, con_perspectiva: bool, umbral_mm: float, salida: str | None
     return todo_bien
 
 
+def _tapar(imagen, verdad, cuantos):
+    """Pinta encima de los primeros marcadores de esquina, como un reflejo.
+
+    Se agranda el cuadrilátero un 60 % para tapar también la zona blanca: sin
+    ella el detector no encuentra el marcador aunque el negro esté intacto, que
+    es exactamente cómo se pierde un marcador en la cancha real.
+    """
+    salida = imagen.copy()
+    for m in sorted(verdad.esquinas, key=lambda x: x.id)[:cuantos]:
+        puntos = np.array(m.esquinas_px, np.int32)
+        centro = puntos.mean(axis=0)
+        cv2.fillConvexPoly(salida, ((puntos - centro) * 1.6 + centro).astype(np.int32),
+                           (200, 200, 200))
+    return salida
+
+
+def verificar_degradacion(cfg, umbral_mm: float) -> bool:
+    """¿Aguanta el sistema que se pierda un marcador de esquina?
+
+    Con los cuatro, la homografía se recalcula. Con TRES no se puede reajustar
+    —una homografía tiene ocho grados de libertad y tres puntos dan seis, así
+    que lo que falta son justo los términos de perspectiva— pero sí se puede
+    **conservar** la última buena: la cámara está atornillada. Y los tres
+    visibles alcanzan para comprobar que sigue valiendo.
+
+    Lo que se verifica acá es que la precisión NO se degrade al conservar, y que
+    el sistema **rechace** cuando no puede sostener la geometría: con dos
+    marcadores, o cuando los tres delatan que la cámara se movió.
+    """
+    print("=" * 78)
+    print("DEGRADACIÓN: ¿qué pasa si se pierde un marcador de esquina?")
+    print("=" * 78)
+
+    persp = Perspectiva(activa=True,
+                        inclinacion_grados=cfg.sintetico.perspectiva.inclinacion_grados)
+    imagen, verdad = generar(cfg, perspectiva=persp)
+    celdas = np.array([[verdad.cols * fx, verdad.rows * fy]
+                       for fy in np.linspace(.15, .85, 5) for fx in np.linspace(.15, .85, 5)])
+    anclaje = AnclajeCancha(cfg)
+    todo_bien = True
+
+    print("  {:<44} {:>9} {:>10} {:>10}".format("situación", "visibles", "error mm", "desvío mm"))
+    print("  " + "-" * 78)
+    for etiqueta, tapados, debe_andar in (
+        ("los cuatro visibles", 0, True),
+        ("uno tapado: conserva y verifica", 1, True),
+        ("uno tapado, cuadro siguiente", 1, True),
+        ("dos tapados: no hay con qué verificar", 2, False),
+    ):
+        im = _tapar(imagen, verdad, tapados)
+        detectados = detectar_marcadores(im, cfg.marcadores_esquina.nombre_diccionario)
+        try:
+            sistema = anclaje.actualizar(im, detectados)
+            peor, _ = medir(verdad, sistema, celdas)
+            error_mm = peor * verdad.cell_mm
+            paso = debe_andar and error_mm <= umbral_mm
+            print("  {:<44} {:>9} {:>10.3f} {:>10.2f}  {}".format(
+                etiqueta, anclaje.esquinas_visibles, error_mm, anclaje.desvio_mm,
+                "OK" if paso else "DEBERÍA HABER RECHAZADO"))
+        except ErrorGeometria:
+            paso = not debe_andar
+            print("  {:<44} {:>9} {:>10} {:>10}  {}".format(
+                etiqueta, anclaje.esquinas_visibles, "rechaza", "—",
+                "OK" if paso else "NO DEBERÍA RECHAZAR"))
+        todo_bien = todo_bien and paso
+
+    # Con un marcador tapado Y la cámara movida, tiene que darse cuenta.
+    print("\n  Y si además la cámara SE MUEVE, los tres visibles la delatan:\n")
+    print("  {:<44} {:>10} {:>10}".format("la cámara se movió", "desvío mm", "veredicto"))
+    print("  " + "-" * 68)
+    for grados, debe_rechazar in ((0.1, False), (0.5, True), (2.0, True)):
+        anclaje2 = AnclajeCancha(cfg)
+        base, _ = generar(cfg, perspectiva=persp)
+        anclaje2.actualizar(base, detectar_marcadores(
+            base, cfg.marcadores_esquina.nombre_diccionario))
+        movida = Perspectiva(activa=True, inclinacion_grados=persp.inclinacion_grados + grados)
+        im2, v2 = generar(cfg, perspectiva=movida)
+        im2 = _tapar(im2, v2, 1)
+        try:
+            anclaje2.actualizar(im2, detectar_marcadores(
+                im2, cfg.marcadores_esquina.nombre_diccionario))
+            paso = not debe_rechazar
+            veredicto = "acepta"
+        except ErrorGeometria:
+            paso = debe_rechazar
+            veredicto = "RECHAZA"
+        todo_bien = todo_bien and paso
+        print("  {:<44} {:>10.2f} {:>10}  {}".format(
+            "movida {:.1f}°".format(grados), anclaje2.desvio_mm, veredicto,
+            "OK" if paso else "MAL"))
+
+    print("\n  resultado: {}\n".format("TODO OK" if todo_bien else "HAY FALLAS"))
+    return todo_bien
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Verifica el sistema de coordenadas contra la verdad del generador sintético."
@@ -200,6 +300,8 @@ def main(argv: list[str] | None = None) -> int:
             sufijo = "_perspectiva" if con_persp else "_cenital"
             salida = "{}{}{}{}".format(base or salida, sufijo, punto, ext) if punto else salida + sufijo
         resultados.append(correr_modo(cfg, con_persp, args.umbral_mm, salida, args.anotar))
+    if args.modo == "ambos":
+        resultados.append(verificar_degradacion(cfg, args.umbral_mm))
 
     print("=" * 78)
     print("RESULTADO GENERAL: {}".format("TODO OK" if all(resultados) else "HAY FALLAS"))

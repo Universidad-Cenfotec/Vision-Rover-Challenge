@@ -227,6 +227,20 @@ Bloques **amarillos de 10 cm**. No llevan `color` porque **el amarillo está
 reservado**: un objeto amarillo **nunca** es un cubo. No llevan `id` porque son
 intercambiables entre sí; lo único que importa es esquivarlos.
 
+> ### ℹ️ En esta primera edición del reto, `obstacles` viene **vacío**
+>
+> No hay obstáculos en la cancha. **El campo sigue existiendo y sigue siendo una
+> lista**: simplemente llega sin elementos.
+>
+> **Esto NO es un cambio de contrato.** El formato es idéntico y `v` sigue
+> valiendo `1`. No hay que tocar nada: si iteran la lista —como manda la
+> [regla 6.1](#61-iterar-nunca-indexar-por-posición-fija)— no encuentran nada y
+> siguen de largo. El código que escriban hoy va a seguir funcionando si en una
+> edición futura vuelven los obstáculos.
+>
+> El simulador también los emite vacíos, para que lo que prueban sea lo que van
+> a encontrar en la cancha.
+
 ### `start`
 
 | Campo | Tipo | Significado |

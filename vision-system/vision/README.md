@@ -68,27 +68,81 @@ sistema sino el resultado de medir aparatos concretos:
 | `calibraciones/` | Un **perfil por cámara** con su distorsión de lente. Ver [`geometry/`](geometry/README.md). |
 | `mediciones/` | Una sesión por cada prueba de **precisión de ubicación**. Ver [`tools/`](tools/README.md). |
 
-Y los siete subpaquetes. La columna de estado dice qué hay **hoy**, no qué va a
-haber; cada carpeta tiene su propio README con el detalle:
+Dos módulos sueltos que no son de ningún lado, y siete subpaquetes:
+
+| Módulo | Qué es |
+|---|---|
+| `sistema.py` | **El programa.** Encadena todo y se enciende. Elige la fuente, corre el bucle, falla abierto y arbitra las fases |
+| `mundo.py` | **La frontera.** El estado del mundo, inmutable: lo único que cruza de productores a consumidores. No es de ninguno de los dos lados, y por eso no vive dentro de ninguno |
+| `vista.py` | **La ventana.** Consumidor: dibuja sobre la imagen lo que el sistema está publicando. Solo lee, y si se apaga el sistema sigue igual |
+
+La columna de estado dice qué hay **hoy**, no qué va a haber; cada carpeta tiene
+su propio README con el detalle:
 
 | Paquete | Lado | Rol | Estado |
 |---|---|---|---|
-| `sources/` | Productor | De dónde salen las imágenes | 🟢 **cámara USB real** y **generador sintético**, intercambiables |
-| `geometry/` | Productor | Píxeles → celdas | 🟢 **coordenadas ArUco** y **corrección de distorsión** · ⚪ paralaje |
-| `detectors/` | Productor | Qué hay y dónde | ⚪ vacío |
-| `tracking/` | Productor | Identidad, oclusión y edad | ⚪ vacío |
-| `publish/` | Consumidor | Publicación TCP/NDJSON | ⚪ vacío (el comportamiento ya está probado en el simulador del contrato) |
+| `sources/` | Productor | De dónde salen las imágenes | 🟢 **cámara USB real** y **generador sintético con cámara estenopeica**, intercambiables |
+| `geometry/` | Productor | Píxeles → celdas | 🟢 **coordenadas ArUco**, **corrección de distorsión**, **pose de cámara**, **paralaje** y **degradación con 3 marcadores** |
+| `detectors/` | Productor | Qué hay y dónde | 🟢 **rovers** por marcador y **cubos** por color |
+| `tracking/` | Productor | Identidad, oclusión y edad | 🟢 **memoria entre cuadros** |
+| `publish/` | Consumidor | Publicación TCP/NDJSON | 🟢 **reloj propio y último-valor-gana** (el transporte lo comparte con el contrato) |
 | `record/` | Consumidor | Grabación a disco | ⚪ vacío |
-| `tools/` | Herramientas | Puesta a punto | 🟢 **verificación de geometría**, **diagnóstico de cámara**, **patrón de calibración**, **calibración de distorsión** y **precisión de ubicación** · ⚪ alineamiento y monitor |
+| `tools/` | Herramientas | Puesta a punto y verificación | 🟢 **nueve herramientas** · ⚪ guía de alineamiento |
 
 🟢 hay código funcionando · ⚪ planificado, sin código aún
+
+### Lo que mide el sistema, hoy
+
+Todo contra la **verdad conocida** del generador sintético, con la cámara
+inclinada, y contra un criterio de aceptación de **10 mm**:
+
+| Etapa | Error |
+|---|---|
+| Píxeles → celdas | 0,52 mm |
+| Paralaje del rover | 41 mm sin corregir → **0,9 mm** corregido |
+| Rovers | 1,03 mm · 1,2° |
+| Cubos | 1,05 mm · **4,88 mm** con un rover empujándolos |
 
 ## Cómo correr lo que existe hoy
 
 Desde `vision-system/`, con el entorno virtual ya creado (ver el
-[README general](../README.md), sección 8):
+[README general](../README.md), sección 8).
+
+### El sistema completo
 
 ```bash
+.venv/bin/python -m vision.sistema                # con la cámara real
+.venv/bin/python -m vision.sistema --sintetico    # sin cámara, con imágenes generadas
+.venv/bin/python -m vision.sistema --ventana      # además, la vista en vivo
+```
+
+Sin argumentos abre la **cámara**. Lo sintético hay que pedirlo, y el sistema lo
+avisa en pantalla todo el tiempo. Mientras corre se le escribe `ready`, `start`,
+`stop` o `quit`.
+
+Con `--ventana` se abre la **vista en vivo**: la imagen con los marcadores, la
+grilla reproyectada, los rovers con su flecha y los cubos con su base, cada uno
+etiquetado con **la celda que se está publicando**. Desde la ventana se maneja
+con `r` / `s` / `f` / `q`.
+
+La vista se refresca a su propio reloj —12 Hz por defecto, `--ventana-hz` lo
+cambia— así que **no le cuesta nada al procesamiento**: medido, 179 cuadros en
+6 segundos con ventana y sin ventana.
+
+### Las verificaciones y las herramientas
+
+```bash
+# Las cuatro verificaciones contra verdad conocida. Todas corren SIN cámara y
+# devuelven código distinto de cero si algo se sale de umbral.
+.venv/bin/python -m vision.tools.verificar_geometria      # píxeles → celdas
+.venv/bin/python -m vision.tools.verificar_rovers         # posición y ángulo
+.venv/bin/python -m vision.tools.verificar_cubos          # color, base y oclusión
+.venv/bin/python -m vision.tools.verificar_seguimiento    # memoria, oclusión y edad
+
+# Los desfases marcador ↔ robot, medidos con el propio sistema.
+.venv/bin/python -m vision.tools.medir_desfases --autoprueba   # verifica la matemática
+.venv/bin/python -m vision.tools.medir_desfases                # con el robot real
+
 # Verifica el sistema de coordenadas contra la verdad del generador sintético.
 # Corre en dos modos: con cámara cenital perfecta y con la cámara inclinada.
 .venv/bin/python -m vision.tools.verificar_geometria
@@ -112,8 +166,10 @@ Desde `vision-system/`, con el entorno virtual ya creado (ver el
 .venv/bin/python -m vision.tools.precision_ubicacion --comparar           # tabla de cámaras
 ```
 
-Todavía no hay nada que publique telemetría: para eso, hoy se usa el simulador de
-[`../contrato/`](../contrato/README.md).
+El sistema publica telemetría real en el puerto 2026, el mismo del simulador de
+[`../contrato/`](../contrato/README.md). Para mirarla, `test_client.py` del
+contrato sirve igual contra los dos — que es exactamente lo que el contrato les
+promete a los equipos.
 
 ## Dependencias
 

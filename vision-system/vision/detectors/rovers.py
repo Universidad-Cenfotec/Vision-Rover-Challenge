@@ -35,16 +35,20 @@ el espacio de celdas el marcador vuelve a ser un cuadrado y su ángulo vuelve a
 significar lo que tiene que significar. Por eso las cuatro esquinas se convierten
 a celdas **primero**, y todo lo demás se calcula ahí.
 
-Un efecto secundario feliz: el paralaje no afecta la orientación
-----------------------------------------------------------------
+El paralaje mueve la posición y no toca la orientación
+------------------------------------------------------
 El marcador del rover está a 90 mm sobre el tablero, así que no está en el plano
-que define la homografía y aparece corrido hacia afuera (ver el bloque
-`paralaje` de la configuración). Pero como el plano del marcador es **paralelo**
-al tablero, esa deformación es una homotecia —un agrandamiento alrededor del
-punto que está bajo la cámara—, y una homotecia **conserva las direcciones**.
+que define la homografía y aparece corrido hacia afuera. Pero como el plano del
+marcador es **paralelo** al tablero, esa deformación es una homotecia —un
+agrandamiento alrededor del punto que está bajo la cámara—, y una homotecia
+**conserva las direcciones**.
 
-Es decir: la corrección de paralaje, cuando llegue, va a mover la **posición**
-del rover. Su **orientación** ya está bien hoy.
+Consecuencia práctica, medida: la corrección de paralaje mueve la **posición**
+—de hasta 41 mm a menos de 1— y deja la **orientación** igual.
+
+La corrección se aplica pasándole `pose_de_camara` a `detectar_rovers`. Esa pose
+se deduce de los mismos cuatro marcadores de esquina: nadie declara la altura ni
+dónde está la cámara.
 """
 
 from __future__ import annotations
@@ -56,10 +60,11 @@ import numpy as np
 
 try:  # como paquete
     from ..configuracion import ConfigVision, DeteccionRovers
-    from ..geometry.coordenadas import SistemaCoordenadas, centro_de
+    from ..geometry.coordenadas import PoseCamara, SistemaCoordenadas, centro_de
 except ImportError:  # como script suelto
     from vision.configuracion import ConfigVision, DeteccionRovers  # type: ignore[no-redef]
     from vision.geometry.coordenadas import (  # type: ignore[no-redef]
+        PoseCamara,
         SistemaCoordenadas,
         centro_de,
     )
@@ -227,7 +232,10 @@ def aplicar_desfases(
 
 
 def detectar_rovers(
-    detectados: dict[int, np.ndarray], sistema: SistemaCoordenadas, cfg: ConfigVision
+    detectados: dict[int, np.ndarray],
+    sistema: SistemaCoordenadas,
+    cfg: ConfigVision,
+    pose_de_camara: "PoseCamara | None" = None,
 ) -> tuple[RoverDetectado, ...]:
     """Encuentra los rovers entre los marcadores ya detectados de un cuadro.
 
@@ -235,17 +243,39 @@ def detectar_rovers(
     el detector de ArUco **una sola vez** por cuadro y use el mismo resultado
     para armar las coordenadas y para encontrar los rovers.
 
+    `pose_de_camara` habilita la **corrección de paralaje**. El marcador está a
+    90 mm sobre el tablero, así que no está en el plano que define la homografía
+    y se ve corrido hacia afuera: hasta 41 mm con la cámara inclinada, contra un
+    criterio de aceptación de 10. Con la pose —que se deduce de los mismos
+    cuatro marcadores de esquina, sin declarar nada— el corrimiento baja a menos
+    de 1 mm.
+
+    Es opcional y no obligatorio porque hay un caso legítimo sin pose: mirar la
+    pose **cruda** del marcador, que es lo que necesita la calibración de los
+    desfases. Sin pose, las posiciones salen corridas y hay que saberlo.
+
+    La corrección misma vive en `geometry/` (`PoseCamara.a_ras`), no acá: esto
+    es un detector y su trabajo es decir qué ve, no rehacer geometría.
+
     Devuelve la tupla ordenada por ID, para que dos corridas iguales den lo
     mismo. Eso **no** habilita a indexar por posición: la cantidad de rovers
     cambia entre cuadros y hay que buscarlos por `id` (CLAUDE.md, sección 7).
     """
     esquinas = cfg.marcadores_esquina.ids_esperados
     ignorados = cfg.deteccion_rovers.ids_ignorados
+    altura = cfg.paralaje.altura_marcador_rover_mm
 
     rovers = []
     for id_aruco in sorted(detectados):
         if id_aruco in esquinas or id_aruco in ignorados:
             continue
         pose = pose_de_marcador(id_aruco, detectados[id_aruco], sistema)
+        if pose_de_camara is not None:
+            # El ángulo NO se toca: el paralaje es una homotecia y una homotecia
+            # conserva las direcciones. Solo se mueve la posición.
+            corregida = pose_de_camara.a_ras(
+                np.array([[pose.col, pose.row]], dtype=np.float64), altura)[0]
+            pose = PoseMarcador(id=pose.id, col=float(corregida[0]),
+                                row=float(corregida[1]), theta_grados=pose.theta_grados)
         rovers.append(aplicar_desfases(pose, cfg.deteccion_rovers, cfg.tablero.cell_mm))
     return tuple(rovers)

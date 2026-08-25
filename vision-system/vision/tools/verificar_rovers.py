@@ -42,7 +42,9 @@ import numpy as np
 try:  # como paquete
     from ..configuracion import Perspectiva, RoverDemo, cargar_config
     from ..detectors.rovers import detectar_rovers, diferencia_angular
-    from ..geometry.coordenadas import ErrorGeometria, construir_sistema, detectar_marcadores
+    from ..geometry.coordenadas import (
+        ErrorGeometria, construir_sistema, detectar_marcadores, pose_camara,
+    )
     from ..sources.generador_sintetico import generar
 except ImportError:  # como script suelto
     from vision.configuracion import (  # type: ignore[no-redef]
@@ -58,6 +60,7 @@ except ImportError:  # como script suelto
         ErrorGeometria,
         construir_sistema,
         detectar_marcadores,
+        pose_camara,
     )
     from vision.sources.generador_sintetico import generar  # type: ignore[no-redef]
 
@@ -116,12 +119,26 @@ def escenario_barrido() -> tuple[RoverDemo, ...]:
     return tuple(rovers)
 
 
-def escenarios(cfg) -> list[tuple[str, tuple[RoverDemo, ...]]]:
+def escenarios(cfg) -> list[tuple[str, tuple[RoverDemo, ...], bool, tuple | None]]:
+    """Los escenarios y si se les dibuja el chasis del rover.
+
+    El barrido de 36 rovers va SIN chasis y SIN cubos a propósito. Con cuerpo,
+    treinta y seis robots a seis celdas de distancia se tapan entre sí y hasta
+    alcanzan a un marcador de esquina; y con cubos en la cancha, uno le come el
+    borde blanco a un marcador y ese rover deja de existir. Las dos cosas son
+    situaciones físicamente imposibles —en la cancha hay DOS rovers, no treinta
+    y seis— y lo que rompen no es el detector sino el escenario. Aislado sigue
+    sirviendo para lo único que existe: barrer el círculo completo de ángulos.
+
+    Los demás sí llevan chasis y cubos, que es lo realista, y de paso comprueban
+    que ni un cuerpo negro ni un cubo de color al lado estorban la detección del
+    marcador.
+    """
     return [
-        ("los dos rovers de la configuración", cfg.rovers_demo),
-        ("cinco rovers repartidos (identidad por ID)", escenario_multi_rover()),
-        ("ángulos en el borde del círculo", escenario_salto_angular()),
-        ("barrido de ángulos cada 10°", escenario_barrido()),
+        ("los dos rovers de la configuración", cfg.rovers_demo, True, None),
+        ("cinco rovers repartidos (identidad por ID)", escenario_multi_rover(), True, None),
+        ("ángulos en el borde del círculo", escenario_salto_angular(), True, None),
+        ("barrido de ángulos cada 10°", escenario_barrido(), False, ()),
     ]
 
 
@@ -140,6 +157,7 @@ class Resultado:
         self.ids_detectados: list[int] = []
         self.esquinas_coladas: list[int] = []
         self.identidades_ok = True
+        self.paralajes: list[float] = []  # en celdas: lo que cuesta no corregirlo
         self.detalle: list[tuple[int, float, float, float, float]] = []
 
     @property
@@ -158,8 +176,11 @@ class Resultado:
     def prom_ang(self) -> float:
         return sum(self.errores_ang) / len(self.errores_ang) if self.errores_ang else 0.0
 
+    def peor_paralaje(self) -> float:
+        return max(self.paralajes) if self.paralajes else 0.0
 
-def medir(verdad, rovers, ids_esquina) -> Resultado:
+
+def medir(verdad, rovers, ids_esquina, corregido: bool = False) -> Resultado:
     """Compara lo detectado contra la verdad, buscando cada rover por su ID.
 
     Se busca por identidad y no por posición en la lista, que es la misma regla
@@ -176,7 +197,14 @@ def medir(verdad, rovers, ids_esquina) -> Resultado:
         real = verdad_por_id.get(rover.id)
         if real is None:
             continue
-        error_pos = math.hypot(rover.col - real.col, rover.row - real.row)
+        # Se compara contra donde el marcador SE VE sobre el plano del tablero,
+        # no contra donde el rover está de verdad. Son dos preguntas distintas:
+        # "¿el detector midió bien lo que la cámara le mostró?" y "¿cuánto cuesta
+        # que todavía no exista la corrección de paralaje?". Mezclarlas haría que
+        # un detector perfecto pareciera roto.
+        objetivo = (real.col, real.row) if corregido else (real.col_en_plano, real.row_en_plano)
+        error_pos = math.hypot(rover.col - objetivo[0], rover.row - objetivo[1])
+        r.paralajes.append(real.paralaje_celdas)
         error_ang = abs(diferencia_angular(rover.theta_grados, real.theta_grados))
         r.errores_pos.append(error_pos)
         r.errores_ang.append(error_ang)
@@ -188,7 +216,8 @@ def medir(verdad, rovers, ids_esquina) -> Resultado:
         for otro_id, otro in verdad_por_id.items():
             if otro_id == rover.id:
                 continue
-            if math.hypot(rover.col - otro.col, rover.row - otro.row) <= error_pos:
+            otro_obj = (otro.col, otro.row) if corregido else (otro.col_en_plano, otro.row_en_plano)
+            if math.hypot(rover.col - otro_obj[0], rover.row - otro_obj[1]) <= error_pos:
                 r.identidades_ok = False
     return r
 
@@ -200,7 +229,9 @@ def medir(verdad, rovers, ids_esquina) -> Resultado:
 
 def anotar(imagen: np.ndarray, sistema, rovers) -> np.ndarray:
     """Dibuja cada rover con su ID y una flecha hacia donde apunta."""
-    lienzo = cv2.cvtColor(imagen, cv2.COLOR_GRAY2BGR)
+    # La fuente sintética ya entrega BGR, igual que la cámara real; se convierte
+    # solo si viniera en gris, para que la herramienta sirva con las dos.
+    lienzo = imagen.copy() if imagen.ndim == 3 else cv2.cvtColor(imagen, cv2.COLOR_GRAY2BGR)
     for rover in rovers:
         rad = math.radians(rover.theta_grados)
         largo = 3.0  # celdas
@@ -241,8 +272,8 @@ def imprimir_detalle_angular(resultado: Resultado) -> None:
 def correr_modo(cfg, con_perspectiva: bool, umbral_mm: float, umbral_grados: float,
                 salida: str | None, quiere_anotar: bool) -> bool:
     """Corre los cuatro escenarios en un modo. Devuelve True si pasó todo."""
-    persp = Perspectiva(activa=con_perspectiva, inclinacion=cfg.sintetico.perspectiva.inclinacion)
-    titulo = ("CON perspectiva (inclinación {:.2f})".format(persp.inclinacion)
+    persp = Perspectiva(activa=con_perspectiva, inclinacion_grados=cfg.sintetico.perspectiva.inclinacion_grados)
+    titulo = ("CON perspectiva (cámara inclinada {:.1f}°)".format(persp.inclinacion_grados)
               if con_perspectiva else "SIN perspectiva (cenital perfecta)")
     print("=" * 78)
     print("MODO: {}".format(titulo))
@@ -253,23 +284,26 @@ def correr_modo(cfg, con_perspectiva: bool, umbral_mm: float, umbral_grados: flo
     todo_bien = True
     resultado_angular = None
 
-    print("  {:<44} {:>3} {:>9} {:>8} {:>8} {:>8}  {}".format(
-        "escenario", "n", "pos máx", "pos mm", "ang máx", "ang prom", "estado"))
+    print("  {:<40} {:>3} {:>8} {:>8} {:>8} {:>12}  {}".format(
+        "escenario", "n", "pos mm", "ang máx", "ang prom", "paralaje mm", "estado"))
     print("  " + "-" * 96)
 
-    for nombre, rovers_demo in escenarios(cfg):
-        imagen, verdad = generar(cfg, rovers=rovers_demo, perspectiva=persp)
+    for nombre, rovers_demo, con_cuerpo, cubos in escenarios(cfg):
+        imagen, verdad = generar(cfg, rovers=rovers_demo, perspectiva=persp,
+                                 con_cuerpo=con_cuerpo, cubos=cubos)
         detectados = detectar_marcadores(imagen, cfg.marcadores_esquina.nombre_diccionario)
         try:
             # Se le pasa la detección ya hecha: un solo paso del detector por cuadro.
             sistema = construir_sistema(imagen, cfg, detectados)
         except ErrorGeometria as exc:
-            print("  {:<44} ERROR DE GEOMETRÍA: {}".format(nombre, exc))
+            print("  {:<40} ERROR DE GEOMETRÍA: {}".format(nombre, exc))
             todo_bien = False
             continue
 
-        rovers = detectar_rovers(detectados, sistema, cfg)
-        r = medir(verdad, rovers, ids_esquina)
+        # La pose sale de los mismos cuatro marcadores; nadie la declara.
+        pose = pose_camara(sistema, verdad.camara.matriz)
+        rovers = detectar_rovers(detectados, sistema, cfg, pose)
+        r = medir(verdad, rovers, ids_esquina, corregido=True)
 
         paso = (r.completo and not r.esquinas_coladas and r.identidades_ok
                 and r.peor_pos() <= umbral_celdas and r.peor_ang() <= umbral_grados)
@@ -287,9 +321,9 @@ def correr_modo(cfg, con_perspectiva: bool, umbral_mm: float, umbral_grados: flo
         elif not paso:
             motivo = "FUERA DE UMBRAL"
 
-        print("  {:<44} {:>3} {:>9.4f} {:>8.3f} {:>8.3f} {:>8.3f}  {}".format(
-            nombre, len(r.errores_pos), r.peor_pos(), r.peor_pos() * cfg.tablero.cell_mm,
-            r.peor_ang(), r.prom_ang(), motivo))
+        print("  {:<40} {:>3} {:>8.3f} {:>8.3f} {:>8.3f} {:>12.1f}  {}".format(
+            nombre, len(r.errores_pos), r.peor_pos() * cfg.tablero.cell_mm,
+            r.peor_ang(), r.prom_ang(), r.peor_paralaje() * cfg.tablero.cell_mm, motivo))
 
         if nombre.startswith("ángulos"):
             resultado_angular = r
@@ -303,6 +337,9 @@ def correr_modo(cfg, con_perspectiva: bool, umbral_mm: float, umbral_grados: flo
     print("\n  umbrales: posición {:.2f} mm ({:.4f} celdas)  |  orientación {:.2f}°".format(
         umbral_mm, umbral_celdas, umbral_grados))
     print("  esquinas {} reservadas y nunca reportadas como rover".format(ids_esquina))
+    print("  'pos mm' se mide contra la posición REAL del rover, con el paralaje ya\n"
+          "  corregido usando la pose deducida de los cuatro marcadores. La columna\n"
+          "  'paralaje mm' es cuánto habría errado sin esa corrección.")
     print("  resultado: {}".format("TODO OK" if todo_bien else "HAY ESCENARIOS QUE FALLAN"))
     if salida:
         print("  imagen guardada en: {}".format(salida))
