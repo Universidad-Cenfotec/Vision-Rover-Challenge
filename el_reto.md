@@ -34,6 +34,10 @@ El hardware oficial de los rovers no debe ser modificado.
 
 # Información proporcionada por el sistema de visión
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Universidad-Cenfotec/Vision-Rover-Challenge/main/vrc1.jpeg" width="100%">
+</p>
+
 El participante no debe desarrollar el sistema de visión global.
 
 El sistema oficial proporcionará información sobre el estado del entorno, incluyendo datos como:
@@ -49,6 +53,10 @@ El sistema oficial proporcionará información sobre el estado del entorno, incl
 Esta información representa una descripción del mundo observado por la cámara.
 
 El participante debe utilizarla para tomar decisiones.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Universidad-Cenfotec/Vision-Rover-Challenge/main/vrc2.jpeg" width="100%">
+</p>
 
 ---
 
