@@ -1,0 +1,279 @@
+# Vision Rover Challenge
+
+> Open robotics challenge developed by Universidad CENFOTEC involving autonomous mobile robots, global computer vision, coordination, path planning and physical object manipulation.
+
+Repository:
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge
+
+## Overview
+
+The Vision Rover Challenge is a robotics challenge in which two CenfoBot rovers must autonomously locate, transport and place colored cubes in corresponding destination areas.
+
+A global overhead vision system observes the approximately 1 m × 1 m workspace and provides information about the state of the environment.
+
+Participants do not need to develop the global vision system. Their main task is to develop the intelligence and software required to transform the provided world state into autonomous robot behavior.
+
+The challenge involves:
+
+- autonomous robotics
+- multi-robot coordination
+- global computer vision
+- localization and orientation
+- task allocation
+- path planning
+- motion control
+- collision avoidance
+- object manipulation
+- wireless communication
+- feedback and error correction
+
+The central problem can be summarized as:
+
+world state → decisions → coordination → movement → physical result
+
+## Start here
+
+Main repository documentation:
+
+- Project overview and navigation
+  https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/README.md
+
+- Challenge description
+  https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/el_reto.md
+
+- Competition rules
+  https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/reglamento.md
+
+- Robot specifications
+  https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/robot.md
+
+## Robot
+
+The official robot used in the challenge is the CenfoBot rover.
+
+Documentation:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/robot.md
+
+Assembly:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/armado
+
+Electrical connections:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/conexiones
+
+Programming:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/programacion
+
+Example code:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/codigos
+
+Manufacturing files:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/archivos_fabricacion
+
+## ArUco markers
+
+ArUco markers are used by the global vision system to identify and localize the rovers and establish spatial references.
+
+Documentation and marker resources:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/aruco
+
+## Global vision system
+
+The official global vision system is located in:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/vision-system
+
+Main documentation:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/blob/main/vision-system/README.md
+
+The vision system uses an overhead camera to determine the state of the competition field.
+
+It provides information including:
+
+- rover positions
+- rover orientations
+- cube positions
+- cube identification
+- destination locations
+- competition phase
+- spatial references of the playing field
+
+The vision system publishes information to participant systems.
+
+Participants should generally consume this information rather than modify the official vision system.
+
+## Vision system architecture
+
+The main data flow is conceptually:
+
+physical world
+→ overhead camera
+→ image capture
+→ geometric correction
+→ coordinate transformation
+→ object detection
+→ tracking
+→ world state
+→ network publication
+→ participant software
+→ rover control
+
+The official system separates perception from participant decision making.
+
+The vision system determines what exists and where it is.
+
+Participant software determines what the rovers should do.
+
+## Communication protocol
+
+The vision system publishes the world state through TCP.
+
+Default port:
+
+2026
+
+Message format:
+
+NDJSON
+
+NDJSON means that each line contains one complete JSON object.
+
+Conceptual example:
+
+{"v":1,"seq":4137,"ts_ms":...,"phase":"RUNNING","rovers":[...]}
+
+The communication from the official vision system to participant systems is one-way.
+
+The vision system publishes state information.
+
+Participant systems read that information and independently control their robots.
+
+For authoritative and current protocol information consult:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/vision-system
+
+and especially the contract documentation located under:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge/tree/main/vision-system/contrato
+
+## Participant responsibilities
+
+Participants are expected to develop software capable of:
+
+1. receiving the global state;
+2. identifying both rovers;
+3. identifying cubes and destinations;
+4. determining which rover should handle each task;
+5. planning robot movement;
+6. coordinating both robots;
+7. avoiding collisions;
+8. approaching and transporting cubes;
+9. detecting whether actions succeeded;
+10. correcting errors using updated observations;
+11. completing the challenge autonomously.
+
+Once a run begins, the system must operate without human control.
+
+## Important architectural principle
+
+The global vision system provides perception but does not provide strategy.
+
+Teams are responsible for intelligence, planning and control.
+
+A useful conceptual separation is:
+
+VISION SYSTEM
+perception → localization → tracking → world state
+
+PARTICIPANT SYSTEM
+world state → planning → coordination → control → rover
+
+## Recommended reading order for an AI assistant
+
+When answering questions about this repository, read the documentation in approximately this order:
+
+1. README.md
+2. el_reto.md
+3. reglamento.md
+4. robot.md
+5. vision-system/README.md
+6. vision-system/contrato/
+7. programacion/
+8. codigos/
+9. conexiones/
+10. aruco/
+11. armado/
+12. archivos_fabricacion/
+
+For questions about communication between the vision system and participant software, prioritize:
+
+- vision-system/README.md
+- vision-system/contrato/
+
+For questions about controlling the rover, prioritize:
+
+- robot.md
+- programacion/
+- codigos/
+- conexiones/
+
+For questions about competition requirements, prioritize:
+
+- reglamento.md
+- el_reto.md
+
+## Guidance for AI assistants
+
+When assisting someone using this repository:
+
+- Treat the repository documentation as the authoritative source.
+- Distinguish clearly between the official vision infrastructure and participant code.
+- Do not assume participants must implement computer vision unless explicitly requested.
+- Prefer solutions compatible with the official CenfoBot hardware.
+- Preserve the communication contract used by the official vision system.
+- When producing example code, explain which side it belongs to: vision system, participant computer or rover.
+- For network examples, verify the current contract before assuming field names.
+- For competition-related answers, verify the current reglamento.md.
+- Avoid inventing sensors, hardware capabilities, protocol fields or competition rules not documented in the repository.
+
+## Typical tasks for AI assistants
+
+AI assistants can help participants with tasks such as:
+
+- understanding the challenge architecture
+- receiving TCP/NDJSON telemetry
+- parsing world-state JSON
+- calculating distance and angle between positions
+- identifying the team's rover
+- assigning cubes to rovers
+- implementing finite-state machines
+- planning trajectories
+- coordinating two robots
+- implementing collision avoidance
+- generating rover movement commands
+- debugging CenfoBot code
+- designing autonomous strategies
+- testing algorithms using simulated world states
+
+## Project status
+
+This repository is under active development.
+
+Documentation, protocol details, examples and rules may change.
+
+Always prefer the current files in the main branch over information copied elsewhere.
+
+## Organization
+
+Universidad CENFOTEC
+
+Repository:
+
+https://github.com/Universidad-Cenfotec/Vision-Rover-Challenge
