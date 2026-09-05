@@ -176,3 +176,32 @@ Se valorará principalmente:
 * El tiempo de ejecución.
 * La cantidad de objetos correctamente entregados.
 
+## Resumen de lo que NO se puede hacer
+
+| Área                 | ❌ Lo que NO se puede hacer                         | Ejemplo                                            |
+| -------------------- | -------------------------------------------------- | -------------------------------------------------- |
+| **Hardware**         | Modificar físicamente los rovers                   | Cortar, perforar o alterar el robot                |
+| **Chasis**           | Modificar el chasis original                       | Agregar una pala para empujar cubos                |
+| **Componentes**      | Agregar componentes físicos                        | Añadir piezas impresas en 3D                       |
+| **Componentes**      | Retirar componentes                                | Quitar un sensor para reducir peso                 |
+| **Electrónica**      | Modificar la electrónica                           | Alterar la tarjeta principal                       |
+| **Microcontrolador** | Sustituir el microcontrolador                      | Cambiar el ESP32 por otro controlador              |
+| **Controladores**    | Agregar tarjetas de desarrollo                     | Incorporar Raspberry Pi, Arduino, otro ESP32, etc. |
+| **Sensores**         | Agregar sensores                                   | Añadir LiDAR, cámara, ToF, encoders, etc.          |
+| **Sensores**         | Sustituir sensores                                 | Cambiar el ultrasónico por otro modelo             |
+| **Actuadores**       | Agregar actuadores                                 | Incorporar servomotores                            |
+| **Manipulación**     | Agregar mecanismos de recolección                  | Pinzas, brazos, palas móviles                      |
+| **Motores**          | Cambiar los motores                                | Instalar motores más rápidos                       |
+| **Ruedas**           | Cambiar las ruedas                                 | Usar ruedas de mayor diámetro                      |
+| **Baterías**         | Cambiar el sistema de alimentación                 | Usar una batería diferente                         |
+| **Robot**            | Utilizar otra plataforma                           | Competir con un rover diseñado por el equipo       |
+| **Control humano**   | Controlar manualmente los robots durante la prueba | Teclado, joystick, teléfono o control remoto       |
+| **Intervención**     | Tocar los robots durante la ejecución              | Reorientar un rover que quedó mal colocado         |
+| **Objetos**          | Mover manualmente cubos u otros elementos          | Corregir la posición de un cubo                    |
+| **Software**         | Modificar el código durante la prueba              | Corregir un programa después de iniciar            |
+| **Robot**            | Reprogramarlo durante la prueba                    | Subir nuevo firmware al ESP32                      |
+| **Robot**            | Reiniciarlo selectivamente durante la ejecución    | Resetear un rover que dejó de responder            |
+| **Comandos**         | Enviar instrucciones humanas                       | Decidir manualmente que Rover 1 vaya al cubo rojo  |
+| **Autonomía**        | Tomar decisiones humanas después de iniciar        | Cambiar rutas o asignaciones manualmente           |
+
+
