@@ -46,39 +46,57 @@ El sistema hace tres cosas:
 3. **Publica** esa información por la red, varias veces por segundo, en un
    formato fijo que los equipos consumen.
 
-Además, el sistema hace de **árbitro**: es quien dice si la ronda está por
-empezar, corriendo o terminada.
+Además, el sistema publica la **fase oficial de la ronda** para que todos los
+rovers reciban una referencia común (`IDLE`, `READY`, `RUNNING`, `FINISHED`).
+La transición entre fases es operada por la organización de acuerdo con las
+indicaciones del juez; el sistema de visión distribuye ese estado de manera
+consistente a todos los equipos.
 
 ### Lo que este proyecto NO hace
 
-**No maneja los rovers.** La planificación de rutas, la coordinación entre los
-dos robots, el control de motores y la lógica de juego son responsabilidad de
-**cada equipo**. Nosotros solo informamos; ellos deciden.
+**No maneja los rovers.** La planificación de rutas, la asignación de tareas, la
+coordinación entre los dos robots, el control de motores y la lógica de juego son
+responsabilidad de **cada equipo y deben ejecutarse en los rovers durante una
+ronda oficial**. Nosotros solo informamos; los rovers deciden.
+
+La computadora que ejecuta este sistema de visión pertenece a la infraestructura
+oficial de la competencia. No es una computadora de control del equipo y no
+envía rutas, decisiones ni comandos de movimiento a los robots.
 
 Esa frontera es importante y se respeta con cuidado: el día de la competencia,
-veinte equipos van a estar consumiendo nuestros datos, y todos tienen que poder
-confiar en que el formato no cambió.
+los equipos van a estar consumiendo nuestros datos y todos tienen que poder
+confiar tanto en la estabilidad del formato como en la separación entre
+**percepción global** y **control autónomo en los rovers**.
 
 ---
 
 ## 2. El reparto de responsabilidades
 
 ```
-        ┌───────────────────────────┐         ┌───────────────────────────┐
-        │   NOSOTROS (este repo)    │         │      LOS EQUIPOS          │
-        ├───────────────────────────┤         ├───────────────────────────┤
-        │ • cámara y procesamiento  │  datos  │ • planificar rutas        │
-        │ • dónde está cada objeto  │ ──────► │ • coordinar los 2 rovers  │
-        │ • orientación de rovers   │  TCP    │ • evitar colisiones       │
-        │ • fase de la ronda        │         │ • mover los motores       │
-        │ • publicar telemetría     │         │ • firmware del robot      │
-        └───────────────────────────┘         └───────────────────────────┘
-                    ▲                                      │
-                    │                                      │
-                    └──────── nunca vuelve nada ───────────┘
-              La comunicación es en UNA sola dirección: nosotros
-              publicamos, ellos leen. No reciben comandos de vuelta.
+        ┌───────────────────────────┐         ┌───────────────────────────────┐
+        │   SISTEMA DE VISIÓN       │         │     ROVERS DE LOS EQUIPOS     │
+        │   (infraestructura oficial)│        │       (ESP32 / IdeaBoard)     │
+        ├───────────────────────────┤         ├───────────────────────────────┤
+        │ • cámara y procesamiento  │  datos  │ • interpretar telemetría      │
+        │ • dónde está cada objeto  │ ──────► │ • planificar rutas            │
+        │ • orientación de rovers   │  TCP    │ • asignar y coordinar tareas  │
+        │ • fase oficial de ronda   │         │ • evitar colisiones           │
+        │ • publicar telemetría     │         │ • controlar los motores       │
+        └───────────────────────────┘         └───────────────────────────────┘
+                    ▲
+                    │
+                    └──── el sistema de visión no recibe decisiones
+                          ni comandos de los equipos
 ```
+
+La comunicación del contrato de visión es **unidireccional**: el sistema oficial
+publica el estado del mundo y los rovers lo leen.
+
+Durante desarrollo y pruebas, un equipo puede consumir la telemetría desde una
+computadora para depurar, simular o validar su software. Durante una ronda
+oficial, esa computadora externa no puede convertirse en el planificador,
+coordinador o controlador de los rovers.
+
 
 ---
 
@@ -88,8 +106,8 @@ Este es el recorrido completo, desde la luz que entra a la cámara hasta el
 rover que decide girar:
 
 ```
-  MUNDO FÍSICO              SISTEMA DE VISIÓN                    LOS EQUIPOS
-  ════════════              ═════════════════                    ═══════════
+  MUNDO FÍSICO              SISTEMA DE VISIÓN                 ROVERS DEL EQUIPO
+  ════════════              ═════════════════                 ═════════════════
 
   ┌──────────────┐
   │ cancha 1×1 m │
@@ -154,17 +172,24 @@ rover que decide girar:
          │
     ─────┼──────────────────────────────────────────────────────────────────
          ▼
-  ┌──────────────────┐
-  │ código del equipo│   ⑧  Lee líneas, parsea el JSON, busca SU rover por id,
-  │  (computadora    │      calcula a dónde ir…
-  │   o ESP32)       │
-  └────────┬─────────┘
-           │ órdenes de motor (esto ya no es asunto nuestro)
-           ▼
-     ┌──────────┐
-     │  rover   │
-     └──────────┘
+  ┌──────────────────────┐
+  │ software del rover   │   ⑧  El ESP32/IdeaBoard lee líneas, parsea el JSON,
+  │  ESP32 / IdeaBoard   │      identifica los rovers y objetos, decide qué hacer,
+  │                      │      coordina y planifica localmente.
+  └──────────┬───────────┘
+             │ control local de motores
+             ▼
+       ┌──────────┐
+       │  rover   │
+       └──────────┘
 ```
+
+> Durante **desarrollo y pruebas**, una computadora puede sustituir temporalmente
+> al rover como cliente del contrato para inspeccionar telemetría, probar
+> algoritmos o ejecutar el simulador. Durante una **ronda oficial**, la
+> planificación, asignación de tareas y generación de comandos de movimiento deben
+> ejecutarse en los rovers; una computadora externa no puede formar parte del
+> lazo de control del equipo.
 
 ### Qué de todo esto ya funciona
 
@@ -504,14 +529,22 @@ La dependencia va en **un solo sentido**:
 Así los equipos reciben algo liviano que corre en cualquier máquina, sin
 arrastrar 44 MB de OpenCV ni la mitad del sistema de visión.
 
-### Por qué el sistema es árbitro
+### Por qué el sistema publica la fase de la ronda
 
 La visión publica un campo de **fase**: `IDLE`, `READY`, `RUNNING`, `FINISHED`.
 
-Alguien tiene que decir cuándo empieza y termina la ronda, y tiene que ser una
-sola voz. Si cada equipo decidiera por su cuenta, un rover podría arrancar antes
-que el otro. La visión ya está mirando todo y hablándole a todos: es el lugar
-natural para esa autoridad.
+Todos los equipos necesitan una referencia común sobre el estado de la ronda. La
+autoridad de inicio y finalización corresponde a la **organización y al juez**;
+el sistema de visión convierte esa decisión operativa en un estado técnico único
+y lo publica a todos los rovers.
+
+De esta manera, todos reciben la misma información de fase sin que cada equipo
+tenga que inferir por su cuenta si la ronda comenzó o terminó.
+
+La fase publicada no contiene estrategia ni comandos de movimiento. Sigue siendo
+parte de la telemetría oficial: informa el estado de la competencia, mientras que
+cada rover decide autónomamente cómo actuar.
+
 
 ---
 
@@ -546,11 +579,7 @@ completo, el mismo que aparece en [`contrato/CONTRATO.md`](contrato/CONTRATO.md)
     { "color": "blue",  "col": 15.000, "row": 29.000, "age_ms": 425 },
     { "color": "red",   "col": 33.071, "row": 25.983, "age_ms": 0   }
   ],
-  "obstacles": [
-    { "col": 21.468, "row": 21.511, "age_ms": 0 },
-    { "col": 10.014, "row": 16.952, "age_ms": 0 },
-    { "col": 30.946, "row": 14.951, "age_ms": 0 }
-  ],
+  "obstacles": [],
   "start":  { "col": 2.5, "row": 2.5 },
   "depots": [
     { "color": "green", "col": 40.5, "row": 2.5  },
@@ -574,15 +603,19 @@ Las posiciones van en **celdas con decimales** (una celda = 20 mm), con el orige
 en el marcador ID 0, `col` creciendo a la derecha y `row` hacia abajo. Los
 ángulos en grados, `0` = derecha, sentido antihorario.
 
-### Los equipos consumen JSON crudo
+### Los rovers consumen JSON crudo
 
-**No importan ningún archivo nuestro.** Se conectan, cortan por `\n`, parsean con
-`json.loads()` e iteran las listas buscando por identidad: el rover por su `id`,
-el cubo por su `color`.
+Durante una ronda oficial, los **rovers** son los consumidores de la telemetría.
+Se conectan al servidor, separan cada mensaje por `\n`, parsean el JSON e iteran
+las listas buscando por identidad: el rover por su `id` y el cubo por su `color`.
+
+Los equipos pueden reproducir exactamente el mismo flujo desde una computadora
+durante desarrollo y pruebas. Esa computadora sirve para depurar y validar, pero
+no puede asumir la planificación o el control de los rovers durante la ronda.
 
 `schema.py` existe, pero es **infraestructura interna nuestra**: la fuente de
 verdad compartida entre el simulador y el sistema de visión. No se ofrece como
-biblioteca, y la documentación de los equipos tiene **un solo camino**.
+biblioteca para el rover. El contrato documentado es la interfaz pública.
 
 ### Pueden desarrollar sin cámara
 
@@ -591,8 +624,10 @@ que el sistema real, e incluso reproduce a propósito las patologías de la vida
 real: ruido, oclusiones, pérdidas de detección y cubos que se mueven al ser
 empujados.
 
-Un equipo puede escribir y probar todo su código de rover **antes de ver una
-cancha**.
+Un equipo puede escribir y probar gran parte de su lógica **antes de ver una
+cancha**, utilizando una computadora como entorno de desarrollo y el simulador
+como fuente de telemetría. Antes de competir, esa lógica debe quedar preparada
+para ejecutarse en los rovers según las reglas de autonomía.
 
 El manual completo para los equipos está en
 **[`contrato/CONTRATO.md`](contrato/CONTRATO.md)**.
@@ -611,8 +646,13 @@ Esto es lo que hace todo: mira, deduce y publica.
 .venv/bin/python -m vision.sistema --ventana      # además, la vista en vivo
 ```
 
-Mientras corre, se le escribe por teclado: `ready`, `start`, `stop`, `quit`. La
-visión es árbitro y esos comandos son su voz.
+Mientras corre, el operador de la infraestructura oficial puede escribir
+`ready`, `start`, `stop`, `quit`. Estos comandos cambian la fase publicada por el
+sistema de visión y deben utilizarse de acuerdo con la señal del juez y la
+operación de la competencia.
+
+No son comandos disponibles para los equipos ni mecanismos de control de los
+rovers.
 
 ### La vista en vivo
 
@@ -640,8 +680,13 @@ Para ver lo que sale, en otra terminal:
 python3 contrato/test_client.py
 ```
 
-Es el mismo cliente de referencia que usan los equipos, sin modificar: se conecta
-al puerto 2026 y valida cada mensaje contra el contrato.
+Es el cliente de referencia para **desarrollo, pruebas y validación**: se conecta
+al puerto 2026 y verifica cada mensaje contra el contrato.
+
+Sirve para comprobar desde una computadora que la red y la telemetría funcionan.
+No representa la arquitectura de control permitida durante una ronda oficial; en
+competencia, el rover debe implementar el consumo del contrato y ejecutar
+localmente su estrategia.
 
 ### Preparar el entorno (una sola vez)
 
@@ -781,7 +826,9 @@ configuración**, junto al valor: `vision/config_vision.json` distingue lo
 ## 10. Cómo seguir
 
 - **Si vas a usar el sistema como equipo:** leé
-  [`contrato/CONTRATO.md`](contrato/CONTRATO.md). Es lo único que necesitás.
+  [`contrato/CONTRATO.md`](contrato/CONTRATO.md) para implementar la recepción de
+  telemetría y consultá también el [`reglamento.md`](../reglamento.md) para las
+  condiciones de autonomía y la arquitectura permitida durante una ronda.
 - **Si vas a trabajar en el sistema de visión:** leé
   [`CLAUDE.md`](CLAUDE.md), que fija las reglas del proyecto, y después el
   `README.md` de la carpeta que vayas a tocar.
