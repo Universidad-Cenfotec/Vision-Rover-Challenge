@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101725">
+  <title>Vision Rover Challenge · Generador de distribuciones</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1220;--panel:#151f31;--line:#2d3b50;--ink:#f3f7fe;--sub:#adbbcf;--mint:#7aebd3;--red:#f43f51;--blue:#397ce9;--green:#00a98f}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 74% 0%,#1b3042 0%,#0b1220 52%,#080d17 100%);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink)}
+    .layout{max-width:1450px;margin:0 auto;padding:clamp(15px,3vw,36px);display:grid;grid-template-columns:minmax(250px,330px) minmax(0,1fr);gap:clamp(15px,2.2vw,30px);align-items:start}
+    h1{font-size:clamp(25px,3vw,37px);line-height:1.12;letter-spacing:-.035em;margin:10px 0 12px}
+    h2{font-size:16px;margin:0 0 12px}
+    p{margin:0;color:var(--sub)}
+    .eyebrow{color:var(--mint);font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+    .intro{margin-bottom:27px}
+    .panel{background:linear-gradient(155deg,#182538,#111a29);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:16px;box-shadow:0 14px 45px #0002}
+    label{font-weight:680}
+    .level-row{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:15px}
+    #difficultyNumber{appearance:textfield;width:76px;background:#0b1321;border:1px solid #61728b;border-radius:9px;color:var(--ink);text-align:center;padding:7px 8px;font-size:18px;font-weight:750;font-variant-numeric:tabular-nums}
+    #difficultyNumber::-webkit-outer-spin-button,#difficultyNumber::-webkit-inner-spin-button{appearance:none;margin:0}
+    input[type=range]{width:100%;accent-color:var(--mint);cursor:pointer}
+    .range-labels{display:flex;justify-content:space-between;color:var(--sub);font-size:12px;margin:5px 0 16px}
+    button{border:0;border-radius:10px;padding:12px 14px;font:inherit;font-weight:780;cursor:pointer;transition:filter .15s,transform .15s}
+    button:hover{filter:brightness(1.08)}button:active{transform:translateY(1px)}button:focus-visible,input:focus-visible{outline:3px solid #98f6e2;outline-offset:3px}
+    .primary{background:var(--mint);color:#05251e;width:100%}
+    .secondary{background:#233146;color:var(--ink);border:1px solid #43536a;width:100%;margin-top:8px}
+    .mini{color:var(--sub);font-size:12px;margin-top:12px}
+    .metric{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+    .metric:last-of-type{border:0}.metric span{color:var(--sub);font-size:13px}.metric strong{font-size:20px;letter-spacing:-.025em;font-variant-numeric:tabular-nums}
+    .legend{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0}
+    .legend-item{display:flex;align-items:center;gap:8px;font-size:13px}.swatch{display:inline-block;width:12px;height:12px;flex:none;border:1px solid white;border-radius:2px}
+    .red{background:var(--red)}.blue{background:var(--blue)}.green{background:var(--green)}
+    .board-area{min-width:0}.board-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:1px 0 11px;color:var(--sub);font-size:13px}
+    .pill{font-size:12px;background:#17283b;border:1px solid #35536a;border-radius:30px;padding:4px 10px;white-space:nowrap;color:#c6efe4}
+    .board-frame{margin:auto;max-width:820px;background:#e9edf5;padding:clamp(4px,.8vw,9px);border-radius:13px;border:1px solid #506077;box-shadow:0 18px 60px #0007}
+    canvas{display:block;width:100%;height:auto;aspect-ratio:1;touch-action:none;cursor:default;background:white;border-radius:5px}
+    canvas.dragging{cursor:grabbing}canvas.pickable{cursor:grab}
+    .below{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;max-width:820px;margin:11px auto;color:var(--sub);font-size:12px}
+    .toggle{display:flex;gap:8px;align-items:center;color:var(--sub);font-weight:500;cursor:pointer}.toggle input{accent-color:var(--mint);width:16px;height:16px}
+    .notice{min-height:22px;color:var(--mint);font-size:12px;margin-top:9px}
+    @media(max-width:830px){.layout{grid-template-columns:1fr}.sidebar{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.intro{grid-column:1/-1;margin-bottom:16px}.panel{margin-bottom:14px}.board-area{grid-row:2}.board-frame{max-width:680px}.board-head{max-width:680px;margin-left:auto;margin-right:auto}}
+    @media(max-width:570px){.sidebar{display:block}.board-area{grid-row:auto}.panel{padding:16px}.layout{padding:13px}.board-head{font-size:11px}.pill{font-size:10px}.below{font-size:11px}}
+  </style>
+</head>
+<body>
+<main class="layout">
+  <section class="sidebar" aria-label="Controles del generador">
+    <header class="intro">
+      <div class="eyebrow">Vision Rover Challenge</div>
+      <h1>Generador de escenarios</h1>
+      <p>Tres cubos, tres zonas de acopio y dos robots. Crea una distribución aleatoria con la dificultad que elijas.</p>
+    </header>
+    <section class="panel" aria-labelledby="levelHeading">
+      <h2 id="levelHeading">Dificultad objetivo</h2>
+      <div class="level-row"><label for="difficulty">Valor entre 0 y 1</label><input id="difficultyNumber" aria-label="Dificultad numérica" type="number" min="0" max="1" step="0.01" value="0.50"></div>
+      <input id="difficulty" aria-label="Dificultad" type="range" min="0" max="1" step="0.01" value="0.50">
+      <div class="range-labels"><span>0 · Cerca / pocas interferencias</span><span>1 · Lejos / más cruces</span></div>
+      <button type="button" id="generate" class="primary">↻ &nbsp;Acomodar cubos al azar</button>
+      <button type="button" id="download" class="secondary">↓ &nbsp;Guardar escenario en JSON</button>
+      <p class="mini">Puedes arrastrar los cubos para hacer ajustes manuales. Cada cubo ocupa exactamente 3 × 3 casillas y debe conservar al menos 2 casillas libres de separación respecto de los demás cubos.</p>
+      <div id="notice" class="notice" role="status" aria-live="polite"></div>
+    </section>
+    <section class="panel" aria-labelledby="statsHeading">
+      <h2 id="statsHeading">Distribución actual</h2>
+      <div class="metric"><span>Distancia media al acopio</span><strong id="distance">—</strong></div>
+      <div class="metric"><span>Pares de rutas que se cruzan*</span><strong id="crossings">—</strong></div>
+      <div class="metric"><span>Superficie de cada cubo</span><strong>3 × 3</strong></div>
+      <p class="mini">* Cruce geométrico o acercamiento de menos de 4 casillas entre rutas rectas, no una predicción de colisión ni una planificación real de los robots.</p>
+    </section>
+    <section class="panel" aria-labelledby="legendHeading">
+      <h2 id="legendHeading">Referencias del tablero</h2>
+      <div class="legend">
+        <div class="legend-item"><i class="swatch red"></i>Cubo/acopio rojo</div>
+        <div class="legend-item"><i class="swatch green"></i>Cubo/acopio verde</div>
+        <div class="legend-item"><i class="swatch blue"></i>Cubo/acopio azul</div>
+        <div class="legend-item">🤖 &nbsp;2 robots, salida inferior</div>
+      </div>
+      <p class="mini">Tablero de 50 × 50; área interior útil de 40 × 40, entre las casillas 6 y 45 (contadas desde 1). Los cubos se mantienen dentro de esa área, con al menos 2 casillas libres entre cubos, incluso al moverlos manualmente.</p>
+    </section>
+  </section>
+  <section class="board-area" aria-label="Tablero de juego">
+    <div class="board-head"><span>Tablero cuadriculado · 50 × 50</span><span class="pill">Área útil · 40 × 40</span></div>
+    <div class="board-frame"><canvas id="board" width="1000" height="1000" role="img" aria-label="Tablero de 50 por 50 con tres cubos y zonas de acopio. Los cubos pueden arrastrarse con el puntero."></canvas></div>
+    <div class="below"><label class="toggle" for="routes"><input id="routes" type="checkbox">Mostrar rutas directas hacia los acopios</label><span>Las zonas están centradas en los lados superior, izquierdo y derecho; los robots parten del lado inferior.</span></div>
+  </section>
+</main>
+<script>
+(() => {
+  'use strict';
+  const SIZE = 50, INNER_MIN = 5, INNER_MAX = 44, CELL = 20, CUBE = 3, MIN_GAP = 2;
+  const canvas = document.getElementById('board');
+  const ctx = canvas.getContext('2d');
+  const slider = document.getElementById('difficulty');
+  const number = document.getElementById('difficultyNumber');
+  const showRoutes = document.getElementById('routes');
+  const notice = document.getElementById('notice');
+  // Todas las coordenadas se expresan en casillas, con origen (0,0) arriba a la izquierda.
+  // Las zonas de acopio están centradas en tres lados, como en la referencia visual.
+  const goals = {
+    red:   {x:21, y:1,  w:8, h:6, color:'#f43f51', name:'rojo'},
+    green: {x:1,  y:21, w:6, h:8, color:'#00a98f', name:'verde'},
+    blue:  {x:43, y:21, w:6, h:8, color:'#397ce9', name:'azul'}
+  };
+  const keys = ['red','blue','green'];
+  const robots = [{x:19,y:46,w:4,h:3},{x:27,y:46,w:4,h:3}];
+  let cubes = [];
+  let dragging = null;
+  let lastNotice = '';
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+  const intersectsRects = (a,b) => a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+  const center = r => ({x:r.x+r.w/2, y:r.y+r.h/2});
+  const target = key => center(goals[key]);
+  const cubeCenter = cube => ({x:cube.x+1.5, y:cube.y+1.5});
+  const rect = cube => ({x:cube.x,y:cube.y,w:CUBE,h:CUBE});
+  // Requiere 2 casillas vacías entre las huellas 3×3 de los cubos.
+  // Se aplica también a las esquinas: no se permiten aproximaciones diagonales
+  // con menos de 2 casillas libres en ambas direcciones.
+  function tooClose(a,b) {
+    return a.x < b.x+b.w+MIN_GAP && a.x+a.w+MIN_GAP > b.x &&
+           a.y < b.y+b.h+MIN_GAP && a.y+a.h+MIN_GAP > b.y;
+  }
+
+  function valid(cube, peers=[]) {
+    const r=rect(cube);
+    if(r.x < INNER_MIN || r.y < INNER_MIN || r.x+CUBE-1 > INNER_MAX || r.y+CUBE-1 > INNER_MAX) return false;
+    if(Object.values(goals).some(zone=>intersectsRects(r,zone))) return false;
+    if(robots.some(robot=>intersectsRects(r,robot))) return false;
+    return !peers.some(other=>tooClose(r,rect(other)));
+  }
+
+  function orient(a,b,c) {return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);}
+  function onSeg(a,b,p) {return p.x>=Math.min(a.x,b.x)-1e-8 && p.x<=Math.max(a.x,b.x)+1e-8 && p.y>=Math.min(a.y,b.y)-1e-8 && p.y<=Math.max(a.y,b.y)+1e-8;}
+  function segmentsIntersect(a,b,c,d) {
+    const o1=orient(a,b,c),o2=orient(a,b,d),o3=orient(c,d,a),o4=orient(c,d,b);
+    if (((o1>0&&o2<0)||(o1<0&&o2>0)) && ((o3>0&&o4<0)||(o3<0&&o4>0))) return true;
+    return (Math.abs(o1)<1e-8&&onSeg(a,b,c)) || (Math.abs(o2)<1e-8&&onSeg(a,b,d)) || (Math.abs(o3)<1e-8&&onSeg(c,d,a)) || (Math.abs(o4)<1e-8&&onSeg(c,d,b));
+  }
+  function pointSegDist(p,a,b) {
+    const dx=b.x-a.x,dy=b.y-a.y,len2=dx*dx+dy*dy;
+    const t=len2 ? clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/len2,0,1):0;
+    return Math.hypot(p.x-(a.x+t*dx),p.y-(a.y+t*dy));
+  }
+  function segDistance(a,b,c,d) {
+    if(segmentsIntersect(a,b,c,d))return 0;
+    return Math.min(pointSegDist(a,c,d),pointSegDist(b,c,d),pointSegDist(c,a,b),pointSegDist(d,a,b));
+  }
+  function stats(layout) {
+    const distance=layout.reduce((sum,c)=>{const a=cubeCenter(c),b=target(c.key);return sum+Math.abs(a.x-b.x)+Math.abs(a.y-b.y);},0)/3;
+    let crossings=0;
+    for(let i=0;i<3;i++)for(let j=i+1;j<3;j++){
+      if(segDistance(cubeCenter(layout[i]),target(layout[i].key),cubeCenter(layout[j]),target(layout[j].key))<4)crossings++;
+    }
+    return {distance,crossings};
+  }
+
+  // Se interpola entre una configuración próxima a cada acopio y una disposición
+  // donde los cubos azul y verde quedan a lados opuestos, con rutas que se interfieren.
+  // Una perturbación aleatoria introduce variación en cada pulsación.
+  function proposedLayout(level) {
+    const wave=Math.sin(Math.PI*level);
+    const jitter=level<.1 ? 2 : (level>.9 ? 2.4 : 3.6);
+    const anchors={
+      red:   {x:23.5+rand(-jitter,jitter), y:8.5+31*level+rand(-jitter,jitter)},
+      green: {x:8.5+29*level+rand(-jitter,jitter), y:23+5*wave+rand(-jitter,jitter)},
+      blue:  {x:38.5-29*level+rand(-jitter,jitter), y:23-5*wave+rand(-jitter,jitter)}
+    };
+    return keys.map(key=>({key,x:clamp(Math.round(anchors[key].x),INNER_MIN,INNER_MAX-CUBE+1),y:clamp(Math.round(anchors[key].y),INNER_MIN,INNER_MAX-CUBE+1)}));
+  }
+  function randomLayout(level) {
+    // Buscar simultáneamente proximidad al nivel elegido y diversidad entre tiradas.
+    // En escenarios altos se favorecen cruces de rutas; en bajos se reducen.
+    let best=null, bestLoss=Infinity;
+    const expectedDist=6.5+35*level;
+    for(let attempt=0;attempt<700;attempt++){
+      const layout=proposedLayout(level);
+      if(!layout.every((c,i)=>valid(c,layout.filter((_,j)=>i!==j))))continue;
+      const s=stats(layout);
+      const distLoss=Math.abs(s.distance-expectedDist)/36;
+      const desiredCross=level<.28?0:level<.53?1:level<.77?2:3;
+      const crossLoss=Math.abs(s.crossings-desiredCross)/3;
+      const loss=distLoss*.55+crossLoss*.45+rand(0,.06);
+      if(loss<bestLoss){best=layout;bestLoss=loss;}
+      if(bestLoss<.035&&attempt>40)break;
+    }
+    if(best)return best;
+    // Fallback universal para escenarios improbables con zonas o posiciones próximas.
+    const fallback=[];
+    for(const key of keys){
+      let placed=false;
+      for(let tries=0;tries<10000;tries++){
+        const candidate={key,x:Math.floor(rand(INNER_MIN,INNER_MAX-CUBE+2)),y:Math.floor(rand(INNER_MIN,INNER_MAX-CUBE+2))};
+        if(valid(candidate,fallback)){fallback.push(candidate);placed=true;break;}
+      }
+      if(!placed)throw new Error('No se encontró espacio válido para los tres cubos.');
+    }
+    return fallback;
+  }
+
+  function drawGoal(zone) {
+    const x=zone.x*CELL,y=zone.y*CELL,w=zone.w*CELL,h=zone.h*CELL;
+    ctx.fillStyle=zone.color+'48';ctx.fillRect(x,y,w,h);
+    ctx.save();ctx.lineJoin='round';ctx.setLineDash([12,8]);ctx.lineWidth=7;ctx.strokeStyle='#ffffff';ctx.strokeRect(x+3,y+3,w-6,h-6);
+    ctx.lineWidth=4;ctx.strokeStyle=zone.color;ctx.strokeRect(x+3,y+3,w-6,h-6);ctx.restore();
+  }
+  function drawRobot(r,i) {
+    const x=r.x*CELL,y=r.y*CELL;
+    ctx.save();ctx.shadowColor='#000a';ctx.shadowBlur=9;ctx.shadowOffsetY=3;
+    ctx.fillStyle='#111827';ctx.fillRect(x+8,y+9,r.w*CELL-16,r.h*CELL-11);ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+    ctx.fillStyle='#b7c8d6';ctx.fillRect(x+13,y+2,7,10);ctx.fillRect(x+r.w*CELL-20,y+2,7,10);
+    ctx.fillStyle='#e7f5ff';ctx.fillRect(x+18,y+18,r.w*CELL-36,21);
+    ctx.fillStyle='#172438';ctx.fillRect(x+23,y+22,8,8);ctx.fillRect(x+r.w*CELL-31,y+22,8,8);
+    ctx.fillStyle='#263444';ctx.fillRect(x+4,y+17,9,28);ctx.fillRect(x+r.w*CELL-13,y+17,9,28);
+    ctx.font='bold 10px system-ui';ctx.textAlign='center';ctx.fillStyle='#061321';ctx.fillText(String(i+1),x+r.w*CELL/2,y+55);
+    ctx.restore();
+  }
+  function drawCube(c) {
+    const x=c.x*CELL,y=c.y*CELL,side=3*CELL,col=goals[c.key].color;
+    ctx.save();ctx.shadowColor='#000b';ctx.shadowBlur=9;ctx.shadowOffsetY=3;
+    ctx.fillStyle='#fff';ctx.fillRect(x-3,y-3,side+6,side+6);
+    ctx.fillStyle=col;ctx.fillRect(x,y,side,side);
+    ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+    ctx.strokeStyle='#ffffff88';ctx.lineWidth=1;
+    for(let k=1;k<=2;k++){
+      ctx.beginPath();ctx.moveTo(x+k*CELL,y);ctx.lineTo(x+k*CELL,y+side);ctx.moveTo(x,y+k*CELL);ctx.lineTo(x+side,y+k*CELL);ctx.stroke();
+    }
+    ctx.lineWidth=2;ctx.strokeStyle='#111827';ctx.strokeRect(x,y,side,side);
+    ctx.restore();
+  }
+  function render() {
+    ctx.clearRect(0,0,SIZE*CELL,SIZE*CELL);
+    // Ajedrez auténtico de 50 × 50 casillas alternadas blancas y negras.
+    for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++){
+      ctx.fillStyle=(x+y)%2===0?'#ffffff':'#090b0e';
+      ctx.fillRect(x*CELL,y*CELL,CELL,CELL);
+    }
+    // Delimitar 40 × 40: índices 5..44 en ambos ejes.
+    ctx.save();ctx.lineWidth=6;ctx.strokeStyle='#ffffff';ctx.strokeRect(INNER_MIN*CELL,INNER_MIN*CELL,40*CELL,40*CELL);
+    ctx.lineWidth=3;ctx.strokeStyle='#243e59';ctx.setLineDash([14,8]);ctx.strokeRect(INNER_MIN*CELL,INNER_MIN*CELL,40*CELL,40*CELL);ctx.restore();
+    Object.values(goals).forEach(drawGoal);
+    robots.forEach(drawRobot);
+    if(showRoutes.checked){
+      ctx.save();ctx.setLineDash([9,8]);ctx.lineWidth=4;
+      for(const c of cubes){
+        const a=cubeCenter(c),b=target(c.key);
+        ctx.beginPath();ctx.moveTo(a.x*CELL,a.y*CELL);ctx.lineTo(b.x*CELL,b.y*CELL);
+        ctx.strokeStyle='#ffffff';ctx.lineWidth=7;ctx.stroke();
+        ctx.strokeStyle=goals[c.key].color;ctx.lineWidth=4;ctx.stroke();
+      }
+      ctx.restore();
+    }
+    cubes.forEach(drawCube);
+    if(cubes.length===3){
+      const positions=cubes.map(c=>`${goals[c.key].name} en columna ${c.x+1}, fila ${c.y+1}`).join('; ');
+      canvas.setAttribute('aria-label',`Tablero de 50 por 50, zona útil de 40 por 40. Cubos: ${positions}. Dos robots en el borde inferior.`);
+    }
+  }
+  function refresh() {
+    if(cubes.length!==3)return;
+    const s=stats(cubes);
+    document.getElementById('distance').textContent=`${s.distance.toFixed(1)} casillas`;
+    document.getElementById('crossings').textContent=`${s.crossings} / 3`;
+    render();
+  }
+  function announce(msg){notice.textContent=msg;lastNotice=msg;}
+  function generate(){
+    const level=clamp(Number(slider.value),0,1);
+    cubes=randomLayout(level);
+    refresh();
+    announce(`Nueva distribución generada para dificultad ${level.toFixed(2)}.`);
+  }
+  function setLevel(value){
+    if(value===''||!Number.isFinite(Number(value)))return;
+    const level=Math.round(clamp(Number(value),0,1)*100)/100;
+    slider.value=String(level);
+    number.value=level.toFixed(2);
+  }
+  slider.addEventListener('input',()=>setLevel(slider.value));
+  number.addEventListener('input',()=>{if(number.value!==''&&Number.isFinite(Number(number.value)))slider.value=String(clamp(Number(number.value),0,1));});
+  number.addEventListener('change',()=>setLevel(number.value===''?slider.value:number.value));
+  document.getElementById('generate').addEventListener('click',generate);
+  showRoutes.addEventListener('change',render);
+
+  function atPointer(e){
+    const bounds=canvas.getBoundingClientRect();
+    return {x:Math.floor((e.clientX-bounds.left)/bounds.width*SIZE),y:Math.floor((e.clientY-bounds.top)/bounds.height*SIZE)};
+  }
+  function cubeAt(p){return cubes.findIndex(c=>p.x>=c.x&&p.x<c.x+CUBE&&p.y>=c.y&&p.y<c.y+CUBE);}
+  canvas.addEventListener('pointerdown',e=>{
+    if(e.button!==0)return;
+    const p=atPointer(e),idx=cubeAt(p);
+    if(idx<0)return;
+    dragging={idx,dx:p.x-cubes[idx].x,dy:p.y-cubes[idx].y};
+    canvas.setPointerCapture(e.pointerId);canvas.classList.add('dragging');
+  });
+  canvas.addEventListener('pointermove',e=>{
+    const p=atPointer(e);
+    if(!dragging){canvas.classList.toggle('pickable',cubeAt(p)>=0);return;}
+    const c=cubes[dragging.idx];
+    const moved={...c,x:p.x-dragging.dx,y:p.y-dragging.dy};
+    if(valid(moved,cubes.filter((_,i)=>i!==dragging.idx))){c.x=moved.x;c.y=moved.y;refresh();announce('Cubo movido manualmente.');}
+  });
+  function endDrag(){dragging=null;canvas.classList.remove('dragging');}
+  canvas.addEventListener('pointerup',endDrag);
+  canvas.addEventListener('pointercancel',endDrag);
+  canvas.addEventListener('lostpointercapture',endDrag);
+
+  document.getElementById('download').addEventListener('click',()=>{
+    const output={format:'vision-rover-scenario-v1',board:{width:50,height:50,cellCoordinates:'zero-based',effectiveArea:{x:5,y:5,width:40,height:40}},difficultyTarget:Number(slider.value),cubeSize:{width:3,height:3},minimumFreeCellsBetweenCubes:MIN_GAP,goals,robots,cubes:cubes.map(c=>({...c,width:3,height:3})),metrics:stats(cubes)};
+    const blob=new Blob([JSON.stringify(output,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=`vision-rover-escenario-${String(slider.value).replace('.','-')}.json`;
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    announce('Configuración guardada como archivo JSON.');
+  });
+  generate();
+})();
+</script>
+</body>
+</html>
