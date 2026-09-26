@@ -25,6 +25,26 @@ no titilar; tomar el tiempo oficial ahí le costaría ese segundo a todos los
 equipos por igual, que es lo mismo que decir que el cronómetro está mal
 calibrado.
 
+A qué altura de la ronda entró cada cubo
+----------------------------------------
+Además de cuánto hace que está adentro, se recuerda **en qué instante del
+cronómetro oficial entró**: es el dato que quien mira la pantalla quiere saber
+—"el verde entró a 1:23"— y el que un equipo pregunta después. Es la misma
+marca que se usa para fechar el cierre, pero contada sobre el reloj de la
+ronda, que es el que todos ven.
+
+La marca vive **solo mientras el cubo sigue adentro**. Si sale, por el motivo
+que sea —un rover lo saca, o titila en el borde—, se borra y vuelve a cero; al
+volver a entrar se toma de nuevo, con la hora de esa nueva entrada. No hay
+"primera entrada" que sobreviva a una salida: lo que vale es la entrada de la
+estadía actual.
+
+Solo se anota si el cubo entró **durante la ronda** (`RUNNING`). Un cubo que ya
+estaba adentro al arrancar no entró a ninguna hora de esa ronda, y uno que entra
+en `IDLE` o `READY` tampoco: en esos casos la marca queda vacía. Y al prepararse
+una ronda nueva, las marcas de la anterior se vacían, para que un cubo que quedó
+puesto no muestre la hora de la vuelta pasada.
+
 El veredicto no se calcula acá
 ------------------------------
 Sale de `contrato/schema.py`, igual que el que calcula el equipo en su rover. Si
@@ -93,6 +113,12 @@ class EstadoZona:
 
     `falta_celdas` es cuánto hay que mover el cubo para que entre; vale `inf`
     cuando no hay ningún cubo de ese color en el estado del mundo.
+
+    `entro_en_ronda_ms` es el cronómetro oficial —el transcurrido de la ronda—
+    en el instante en que el cubo entró en su zona **esta vez**. Vale `None`
+    cuando el cubo no está adentro, cuando entró fuera de `RUNNING` o cuando ya
+    estaba puesto al arrancar la ronda. Se borra apenas el cubo sale y se toma
+    de nuevo si vuelve a entrar.
     """
 
     color: str
@@ -102,6 +128,7 @@ class EstadoZona:
     falta_celdas: float
     adentro_hace_ms: int
     edad_cubo_ms: int
+    entro_en_ronda_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +184,10 @@ class ContadorAcopio:
         #: pasaron las cosas; el tiempo oficial de la ronda se mide con un reloj
         #: que ningún ajuste de hora puede mover.
         self._desde_mono: dict[str, float] = {}
+        #: El cronómetro de la ronda cuando cada color entró, o `None` si entró
+        #: fuera de `RUNNING`. Se borra junto con las otras dos marcas: es la
+        #: hora de ESTA estadía, no de la primera vez que el cubo pisó la zona.
+        self._entro_ronda: dict[str, int | None] = {}
 
     @property
     def geometrias(self) -> dict[str, schema.GeometriaDepot]:
@@ -180,6 +211,13 @@ class ContadorAcopio:
         """
         ahora_mono = time.monotonic() if mono is None else mono
         cubos = {c.color: c for c in estado.cubos}  # el color ES la identidad
+        en_ronda = estado.fase == "RUNNING"
+        if estado.fase in ("IDLE", "READY"):
+            # Se está preparando otra ronda, o no hay ninguna: la hora de
+            # entrada de la ronda anterior ya no describe nada. El cubo sigue
+            # adentro y sigue contando; lo que se vacía es a qué altura de qué
+            # ronda entró.
+            self._entro_ronda = {color: None for color in self._entro_ronda}
 
         zonas = []
         for color in sorted(self._geometrias):
@@ -189,6 +227,7 @@ class ContadorAcopio:
                 # que, si vuelve, tenga que ganarse la permanencia de nuevo.
                 self._desde_ms.pop(color, None)
                 self._desde_mono.pop(color, None)
+                self._entro_ronda.pop(color, None)
                 zonas.append(EstadoZona(
                     color=color, presente=False, adentro=False, contado=False,
                     falta_celdas=float("inf"), adentro_hace_ms=0, edad_cubo_ms=0,
@@ -199,12 +238,17 @@ class ContadorAcopio:
                 col=cubo.col, row=cubo.row, geometria=self._geometrias[color])
 
             if not veredicto.adentro:
+                # Salió, por el motivo que sea: las tres marcas se van juntas.
+                # Si vuelve a entrar, se toman de nuevo, con la hora de entonces.
                 self._desde_ms.pop(color, None)
                 self._desde_mono.pop(color, None)
+                self._entro_ronda.pop(color, None)
                 adentro_hace_ms = 0
             else:
                 desde = self._desde_ms.setdefault(color, ts_ms)
                 self._desde_mono.setdefault(color, ahora_mono)
+                self._entro_ronda.setdefault(
+                    color, estado.reloj.transcurrido_ms if en_ronda else None)
                 if ts_ms < desde:  # el reloj retrocedió: se reancla, no se resta mal
                     desde = ts_ms
                     self._desde_ms[color] = desde
@@ -219,6 +263,7 @@ class ContadorAcopio:
                 falta_celdas=veredicto.falta_celdas,
                 adentro_hace_ms=adentro_hace_ms,
                 edad_cubo_ms=cubo.age_ms,
+                entro_en_ronda_ms=self._entro_ronda.get(color),
             ))
 
         # El instante del reto es el del ÚLTIMO cubo en entrar: los otros ya
