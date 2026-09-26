@@ -138,6 +138,23 @@ Dos casos en que la cuenta está completa y la ronda **no** se cierra:
 En `READY`, si algún cubo ya está dentro de su zona, el panel lo grita en rojo:
 **`CUBOS YA EN ZONA`**. Es el único momento en que todavía se puede corregir.
 
+### A qué hora entró cada cubo
+
+Debajo de la cuenta de acopio, el panel muestra **una fila por zona** con el
+estado de su cubo, y la etiqueta de la zona sobre el video dice lo mismo:
+
+| Fila | Qué significa |
+|---|---|
+| `entró a 1:23 · hace 12.4 s` | entró al minuto 1:23 del cronómetro y lleva 12,4 s adentro |
+| `dentro hace 12.4 s` | está adentro, pero no entró durante esta ronda: ya estaba al arrancar, o no hay ronda |
+| `afuera` / `sin cubo` | no está en su zona, o no se lo ve |
+
+**La hora es la de la estadía actual, no la de la primera vez.** Si el cubo
+sale de la zona por el motivo que sea —un rover lo saca, o titila en el borde—
+la hora se borra en ese mismo cuadro y vuelve a cero; al volver a entrar se toma
+de nuevo. Al preparar otra ronda se vacían las de la anterior. El acta guarda
+esa misma hora por cubo, en `entro_en_ronda`.
+
 ---
 
 ## 6. El acta

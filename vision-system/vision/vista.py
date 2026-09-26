@@ -90,6 +90,21 @@ _RONDA_POR_TERMINAR_MS = 60_000
 _ZONA_ALFA = 0.28
 
 
+def _estadia(z) -> str:
+    """Desde cuándo está el cubo en su zona, para la etiqueta y el panel.
+
+    Dice dos cosas y las dos importan: **a qué altura del cronómetro entró**
+    —que es lo que un equipo pregunta después— y **cuánto hace** que está,
+    que es lo que dice si ya se sostuvo. Si el cubo entró fuera de la ronda,
+    o ya estaba puesto al arrancar, no hay hora de entrada que mostrar y se
+    muestra solo la permanencia. Las dos cosas vuelven a cero si el cubo sale.
+    """
+    hace = "hace {:.1f} s".format(z.adentro_hace_ms / 1000.0)
+    if z.entro_en_ronda_ms is None:
+        return "dentro {}".format(hace)
+    return "entró a {} · {}".format(mmss(z.entro_en_ronda_ms), hace)
+
+
 class Vista:
     """Ventana con la imagen de la cámara y lo detectado dibujado encima."""
 
@@ -222,10 +237,8 @@ class Vista:
             return "({:.2f}, {:.2f})".format(geo.col, geo.row)
         if not z.presente:
             return "sin cubo"
-        if z.contado:
-            return "({:.2f}, {:.2f})".format(geo.col, geo.row)
         if z.adentro:
-            return "dentro hace {} ms".format(z.adentro_hace_ms)
+            return _estadia(z)
         return "le falta {:.1f} mm".format(z.falta_celdas * cell)
 
     def _rect_celdas(self, lienzo, col, row, semi_col, semi_row):
@@ -484,6 +497,16 @@ class Vista:
         if acopio is not None and acopio.total:
             panel.estado("Acopio", "{} de {} en posición".format(
                 acopio.en_posicion, acopio.total), VERDE if acopio.completo else BLANCO)
+            # Una fila por zona con la hora de entrada de su cubo. El que sale
+            # vuelve a "afuera" en el mismo cuadro: la hora es de la estadía
+            # actual, no de la primera vez que pisó la zona.
+            for z in acopio.zonas:
+                if not z.presente:
+                    panel.estado("  " + z.color, "sin cubo", GRIS)
+                elif not z.adentro:
+                    panel.estado("  " + z.color, "afuera", GRIS)
+                else:
+                    panel.estado("  " + z.color, _estadia(z), VERDE if z.contado else AMBAR)
 
         panel.separador()
         panel.datos("proceso {:.1f} fps · publicación {} msg".format(

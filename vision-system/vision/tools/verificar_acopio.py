@@ -54,7 +54,7 @@ try:  # como paquete
     from ..geometry.coordenadas import (
         ErrorGeometria, construir_sistema, detectar_marcadores, pose_camara,
     )
-    from ..mundo import CuboEnMundo, EstadoMundo
+    from ..mundo import CuboEnMundo, EstadoMundo, RelojRonda
     from ..reglas.acopio import ContadorAcopio
     from ..sources.generador_sintetico import generar
     from ..tracking.seguimiento import Seguidor
@@ -67,7 +67,7 @@ except ImportError:  # como script suelto
     from vision.geometry.coordenadas import (  # type: ignore[no-redef]
         ErrorGeometria, construir_sistema, detectar_marcadores, pose_camara,
     )
-    from vision.mundo import CuboEnMundo, EstadoMundo  # type: ignore[no-redef]
+    from vision.mundo import CuboEnMundo, EstadoMundo, RelojRonda  # type: ignore[no-redef]
     from vision.reglas.acopio import ContadorAcopio  # type: ignore[no-redef]
     from vision.sources.generador_sintetico import generar  # type: ignore[no-redef]
     from vision.tracking.seguimiento import Seguidor  # type: ignore[no-redef]
@@ -241,8 +241,66 @@ def verificar_recorrido(cfg) -> list[str]:
     return problemas
 
 
+def verificar_hora_de_entrada(cfg) -> list[str]:
+    """Que la hora de entrada se tome al entrar, se borre al salir y se retome.
+
+    Se sigue UN cubo —el de la zona verde— a lo largo de una ronda inventada,
+    con el cronómetro puesto a mano en cada cuadro. Lo que se comprueba es la
+    regla completa: la marca es la del cronómetro al ENTRAR, no la de cuando se
+    cumple la permanencia; se pierde apenas el cubo sale, por titileo o porque
+    se lo llevaron; se vuelve a tomar al volver a entrar, con la hora nueva; no
+    existe para un cubo que ya estaba puesto al arrancar; y no sobrevive a la
+    preparación de otra ronda.
+    """
+    problemas = []
+    geo = geometrias_deposito(cfg)["green"]
+    adentro = (geo.col, geo.row)
+    afuera = (geo.col, geo.row + geo.semi_row * 3)     # lejos, sin ambigüedad
+    permanencia = cfg.conteo_acopio.permanencia_minima_ms
+
+    def paso(contador, fase, transcurrido, ts, pos):
+        cubos = () if pos is None else (CuboEnMundo(color="green", col=pos[0], row=pos[1]),)
+        reloj = RelojRonda(transcurrido_ms=transcurrido, restante_ms=0,
+                           total_ms=600_000 if fase != "IDLE" else 0)
+        r = contador.actualizar(EstadoMundo(ts_ms=ts, fase=fase, reloj=reloj, cubos=cubos), ts)
+        return next(z for z in r.zonas if z.color == "green")
+
+    print("\n  BLOQUE 3 — a qué altura del cronómetro entró cada cubo")
+    print("  " + "-" * 74)
+    print("  {:<50} {:>10} {:>10}  {}".format("caso", "esperado", "obtenido", "estado"))
+    print("  " + "-" * 74)
+
+    c = ContadorAcopio(cfg)
+    # (nombre, fase, transcurrido_ms, ts_ms, posición, marca esperada)
+    guion = (
+        ("entra a 0:05 de ronda", "RUNNING", 5_000, 5_000, adentro, 5_000),
+        ("sigue adentro: la marca no se mueve", "RUNNING", 5_500, 5_500, adentro, 5_000),
+        ("ya contado: la marca sigue siendo la de entrada", "RUNNING",
+         5_000 + permanencia, 5_000 + permanencia, adentro, 5_000),
+        ("sale: la marca se borra", "RUNNING", 20_000, 20_000, afuera, None),
+        ("vuelve a entrar a 0:30: marca nueva", "RUNNING", 30_000, 30_000, adentro, 30_000),
+        ("deja de verse: se borra", "RUNNING", 40_000, 40_000, None, None),
+        ("reaparece adentro a 0:45: marca nueva", "RUNNING", 45_000, 45_000, adentro, 45_000),
+        ("la ronda termina: la marca queda", "FINISHED", 50_000, 50_000, adentro, 45_000),
+        ("se prepara otra ronda: la marca se vacía", "READY", 0, 60_000, adentro, None),
+        ("ya estaba al arrancar: sin marca", "RUNNING", 1_000, 61_000, adentro, None),
+        ("sale y vuelve en la ronda nueva: marca nueva", "RUNNING", 2_000, 62_000, afuera, None),
+        ("…y vuelve a 0:03", "RUNNING", 3_000, 63_000, adentro, 3_000),
+        ("en IDLE no hay ronda: sin marca", "IDLE", 0, 70_000, adentro, None),
+    )
+    for nombre, fase, transcurrido, ts, pos, esperado in guion:
+        z = paso(c, fase, transcurrido, ts, pos)
+        obtenido = z.entro_en_ronda_ms
+        ok = obtenido == esperado
+        print("  {:<50} {:>10} {:>10}  {}".format(
+            nombre, str(esperado), str(obtenido), "OK" if ok else "FALLA"))
+        if not ok:
+            problemas.append("{}: se esperaba {} y dio {}".format(nombre, esperado, obtenido))
+    return problemas
+
+
 # --------------------------------------------------------------------------
-# Bloque 3 — el sistema entero, sobre imágenes sintéticas
+# Bloque 4 — el sistema entero, sobre imágenes sintéticas
 # --------------------------------------------------------------------------
 
 
@@ -313,7 +371,7 @@ def correr_modo(cfg, con_perspectiva: bool, holgura_mm: float) -> bool:
     titulo = ("CON perspectiva (cámara inclinada {:.1f}°)".format(persp.inclinacion_grados)
               if con_perspectiva else "SIN perspectiva (cenital perfecta)")
     print("\n" + "=" * 78)
-    print("BLOQUE 3 — el sistema entero · MODO: {}".format(titulo))
+    print("BLOQUE 4 — el sistema entero · MODO: {}".format(titulo))
     print("=" * 78)
     print("  {:<42} {:>9} {:>10} {:>10}  {}".format(
         "escenario", "esperado", "contados", "peor falta", "estado"))
@@ -398,6 +456,7 @@ def main(argv: list[str] | None = None) -> int:
 
     problemas = verificar_matematica(cfg)
     problemas += verificar_recorrido(cfg)
+    problemas += verificar_hora_de_entrada(cfg)
     modos = {"ambos": (False, True), "cenital": (False,), "perspectiva": (True,)}[args.modo]
     resultados = [correr_modo(cfg, con_persp, args.holgura_mm) for con_persp in modos]
 

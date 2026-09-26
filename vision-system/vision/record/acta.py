@@ -82,6 +82,10 @@ def _cubos(acopio) -> list[dict[str, Any]]:
             "falta_celdas": (round(z.falta_celdas, 4)
                              if z.presente and z.falta_celdas != float("inf") else None),
             "adentro_hace_ms": z.adentro_hace_ms,
+            # A qué altura del cronómetro entró el cubo en esta estadía, o
+            # `None` si entró fuera de la ronda o ya estaba puesto al arrancar.
+            "entro_en_ronda_ms": z.entro_en_ronda_ms,
+            "entro_en_ronda": mmss(z.entro_en_ronda_ms),
             # La edad dice si el veredicto se apoya en una observación fresca o
             # en una posición conservada. Quien revise el acta tiene que poder
             # saberlo sin preguntar.
