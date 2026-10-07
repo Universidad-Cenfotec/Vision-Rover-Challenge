@@ -77,7 +77,7 @@
         <div class="coord-row"><span class="coord-label"><i class="swatch red"></i>Rojo</span><strong class="coord-value" id="coord-red">—</strong></div>
         <div class="coord-row"><span class="coord-label"><i class="swatch green"></i>Verde</span><strong class="coord-value" id="coord-green">—</strong></div>
         <div class="coord-row"><span class="coord-label"><i class="swatch blue"></i>Azul</span><strong class="coord-value" id="coord-blue">—</strong></div>
-        <p class="mini">La coordenada (x, y) corresponde a la esquina inferior izquierda del cubo 3 × 3. El origen (0,0) está en la esquina inferior izquierda del tablero.</p>
+        <p class="mini">La coordenada se muestra en formato (Y, X) y corresponde a la esquina inferior izquierda del cubo 3 × 3. El origen (0,0) está en la esquina inferior izquierda del tablero.</p>
       </div>
       <p class="mini">* Cruce geométrico o acercamiento de menos de 4 casillas entre rutas rectas, no una predicción de colisión ni una planificación real de los robots.</p>
     </section>
@@ -269,8 +269,8 @@
     }
     cubes.forEach(drawCube);
     if(cubes.length===3){
-      const positions=cubes.map(c=>{const p=displayCoord(c);return `${goals[c.key].name} en (${p.x}, ${p.y})`;}).join('; ');
-      canvas.setAttribute('aria-label',`Tablero de 50 por 50, zona útil de 40 por 40. Coordenadas con origen abajo a la izquierda. Cubos: ${positions}. Dos robots en el borde inferior.`);
+      const positions=cubes.map(c=>{const p=displayCoord(c);return `${goals[c.key].name} en (${p.y}, ${p.x})`;}).join('; ');
+      canvas.setAttribute('aria-label',`Tablero de 50 por 50, zona útil de 40 por 40. Coordenadas en formato Y, X con origen abajo a la izquierda. Cubos: ${positions}. Dos robots en el borde inferior.`);
     }
   }
   function refresh() {
@@ -280,7 +280,7 @@
     document.getElementById('crossings').textContent=`${s.crossings} / 3`;
     for(const c of cubes){
       const p=displayCoord(c);
-      document.getElementById(`coord-${c.key}`).textContent=`(${p.x}, ${p.y})`;
+      document.getElementById(`coord-${c.key}`).textContent=`(${p.y}, ${p.x})`;
     }
     render();
   }
